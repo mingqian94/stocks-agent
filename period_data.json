@@ -1,0 +1,7 @@
+{
+  "current_period": 12,
+  "period_history": {
+    "11": {"start": "2026-06-08", "end": "2026-06-12", "initial": 1000000, "final": 1033000, "profit": 33000, "profit_pct": 3.30},
+    "12": {"start": "2026-06-15", "end": "2026-06-18", "initial": 1000000, "final": 0, "profit": 0, "profit_pct": 0}
+  }
+}
