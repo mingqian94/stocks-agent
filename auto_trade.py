@@ -7,6 +7,7 @@ import os
 
 # 导入统一配置
 from accounts import ACCOUNTS, STRATEGIES, get_account_with_strategy, get_strategy
+from keys_config import get_skill_code
 
 # 平台API配置
 PLATFORM_CONFIG = {
@@ -20,14 +21,14 @@ PLATFORM_CONFIG = {
         'name': '华泰-7493',
         'api_url': 'https://ai.zhangle.com/edge/entry/gate/api/simSkills',
         'header_name': 'apiKey',
-        'skill_code': 'mx_1778741794549',
+        'skill_code': get_skill_code(),
         'quote_url': 'https://ai.zhangle.com/edge/entry/gate/api/simSkills/getQuote'
     },
     'ht_8268': {
         'name': '华泰-8268',
         'api_url': 'https://ai.zhangle.com/edge/entry/gate/api/simSkills',
         'header_name': 'apiKey',
-        'skill_code': 'mx_1778741794549',
+        'skill_code': get_skill_code(),
         'quote_url': 'https://ai.zhangle.com/edge/entry/gate/api/simSkills/getQuote'
     }
 }

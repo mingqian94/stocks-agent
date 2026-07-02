@@ -8,6 +8,10 @@ from typing import Literal, Optional
 
 import requests
 
+# 导入统一密钥配置
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from keys_config import get_skill_code
+
 
 # --- 配置 ---
 
@@ -67,7 +71,7 @@ def _network_error(message: str, hint: str = "") -> dict:
 def _post(path: str, body: Optional[dict] = None) -> dict:
     cfg = _get_config()
     url = cfg.api_url.rstrip("/") + cfg.base_url + path
-    headers = {"apiKey": cfg.api_key, "Content-Type": "application/json", "skillCode": "mx_1778741794549"}
+    headers = {"apiKey": cfg.api_key, "Content-Type": "application/json", "skillCode": get_skill_code()}
     try:
         resp = requests.post(url, json=body or {}, headers=headers, timeout=cfg.timeout_seconds)
         if resp.status_code != 200:

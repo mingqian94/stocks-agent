@@ -15,7 +15,7 @@ from accounts import ACCOUNTS, STRATEGIES, get_accounts_for_dashboard, get_accou
 app = Flask(__name__)
 
 # ⚠️ API Key 统一从 keys_config.py 读取，不要在这里写死
-from keys_config import get_key
+from keys_config import get_key, get_skill_code
 
 # 东方财富API
 MX_APIKEY = get_key('dongfang')
@@ -25,7 +25,8 @@ MX_APIURL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/mockTrading'
 HT_APIKEY_7493 = get_key('ht_7493')
 HT_APIKEY_8268 = get_key('ht_8268')
 HT_APIURL = 'https://ai.zhangle.com/edge/entry/gate'
-HT_HEADERS = {'apiKey': '', 'Content-Type': 'application/json', 'skillCode': 'mx_1778741794549'}
+HT_SKILL_CODE = get_skill_code()
+HT_HEADERS = {'apiKey': '', 'Content-Type': 'application/json', 'skillCode': HT_SKILL_CODE}
 
 # ETF列表
 ETFS = {
@@ -81,7 +82,7 @@ def get_positions():
 def get_ht_positions(acount_id):
     """获取华泰账户持仓"""
     api_key = HT_APIKEY_7493 if acount_id == '7493' else HT_APIKEY_8268
-    headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': 'mx_1778741794549'}
+    headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': HT_SKILL_CODE}
     try:
         # 获取余额
         r = requests.post(f'{HT_APIURL}/api/simSkills/getAccountBalance', 
@@ -344,7 +345,7 @@ def get_ht_quote(code, api_key):
     """使用华泰接口获取单个ETF行情"""
     try:
         exchange = 'SH' if code.startswith('5') or code.startswith('6') else 'SZ'
-        headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': 'mx_1778741794549'}
+        headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': HT_SKILL_CODE}
         url = f'{HT_APIURL}/api/simSkills/getQuote'
         data = {'stockCode': code, 'exchange': exchange}
         r = requests.post(url, json=data, headers=headers, timeout=5)
@@ -656,7 +657,7 @@ def api_periods_game(game):
                         avail_balance = float(d.get('availBalance', initial)) / 1000
             elif game.startswith('huatai'):
                 api_key = HT_APIKEY_7493 if game == 'huatai_7493' else HT_APIKEY_8268
-                headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': 'mx_1778741794549'}
+                headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': HT_SKILL_CODE}
                 r = requests.post(f'{HT_APIURL}/api/simSkills/getAccountBalance',
                     json={}, headers=headers, timeout=5)
                 if r.status_code == 200:

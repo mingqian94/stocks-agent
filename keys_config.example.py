@@ -15,6 +15,9 @@ HT_7493_NAME = "华泰-7493"
 HT_8268_APIKEY = "your_ht_8268_apikey"
 HT_8268_NAME = "华泰-8268"
 
+# —— 华泰公共参数 ——
+HT_SKILL_CODE = "your_ht_skill_code"
+
 # ============================================================
 # 统一查询入口（内部使用，不要改）
 # ============================================================
@@ -26,6 +29,9 @@ KEY_MAP = {
 
 def get_key(account_id):
     return KEY_MAP.get(account_id, "")
+
+def get_skill_code():
+    return HT_SKILL_CODE
 
 def is_pending(account_id):
     return get_key(account_id) == "PENDING_USER_INPUT"

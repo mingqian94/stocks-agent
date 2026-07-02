@@ -186,7 +186,7 @@
 | `/api/simSkills/submitOrder` | 买卖下单 |
 | `/api/simSkills/getQuote` | 获取行情 |
 
-**认证**：`apiKey` + `skillCode: mx_1778741794549`
+**认证**：`apiKey` + `skillCode`（从 `keys_config.py` 读取）
 
 **⚠️ 配额限制**：华泰API每日配额有限，两个账户共用配额池，建议轮询间隔≥30分钟
 

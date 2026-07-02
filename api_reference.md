@@ -44,7 +44,7 @@
 **认证方式**：
 ```python
 headers = {
-    'mx-api-key': 'mkt_heJbQPgu8rPWGeTnEcx479Si1TLyOOLa9ikQuKEN6N8',
+    'mx-api-key': get_key('dongfang'),
     'Content-Type': 'application/json'
 }
 ```
@@ -78,10 +78,9 @@ r = requests.post(url, headers=headers, json=data)
 **认证方式**：
 ```python
 headers = {
-    'apiKey': 'ht_qabM0qimkZj86qF3h6Xr118Le88ByCZ5Mu1PDWPws',  # 7493账户
-    # 或 'ht_033MHA9CvnXcZyanwx7qkU4AmLdyv8eIuTtrDOIoX',  # 8268账户
+    'apiKey': get_key('ht_7493'),  # 或 get_key('ht_8268')
     'Content-Type': 'application/json',
-    'skillCode': 'mx_1778741794549'
+    'skillCode': get_skill_code()
 }
 ```
 
