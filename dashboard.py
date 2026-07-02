@@ -632,9 +632,9 @@ def api_periods_game(game):
         round_name = account.get('round', account['competition'])
         period = account.get('period', '')
         initial = account.get('initial', 1000000)
-        # 强制覆盖第13期初始资金（从accounts.py读取，debug时可能未reload）
-        if game == 'dongfang' and round_name == '第13期':
-            initial = 1073000
+        # 强制覆盖第14期初始资金（从accounts.py读取，debug时可能未reload）
+        if game == 'dongfang' and round_name == '第14期':
+            initial = 999000
 
         # 获取当前资产
         total_assets = initial
@@ -668,16 +668,16 @@ def api_periods_game(game):
         except:
             pass
 
-        # 东方财富第12期：初始资金=第11期结束时带入
+        # 东方财富第13期：初始资金=第12期结束时带入
         if game == 'dongfang':
-            initial = 1033000
+            initial = 1073000
 
         profit = total_assets - initial
         profit_pct = round(profit / initial * 100, 2) if initial > 0 else 0
 
-        # 第13期（当前）
-        # 东方财富第13期初始资金 = 第12期结束带入（硬编码，防止accounts模块缓存）
-        effective_initial = 1073000 if game == 'dongfang' else initial
+        # 第14期（当前）
+        # 东方财富第14期初始资金 = 第13期结束带入（硬编码，防止accounts模块缓存）
+        effective_initial = 999000 if game == 'dongfang' else initial
         current_round = {
             'round': round_name,
             'period': period,
@@ -693,8 +693,22 @@ def api_periods_game(game):
 
         # 东方财富多期历史（最新在前）
         rounds = []
-        # 第13期（当前）
+        # 第14期（当前）
         rounds.append(current_round)
+        # 第13期（历史，6.22-6.26）
+        if game == 'dongfang':
+            rounds.append({
+                'round': '第13期',
+                'period': '2026.06.22 - 2026.06.26',
+                'initial': 1073000,
+                'total_assets': 999000,
+                'avail_balance': 0,
+                'profit': -74000,
+                'profit_pct': -6.90,
+                'competition': '东方财富杯',
+                'platform': '东方财富模拟交易',
+                'status': 'ended'
+            })
         # 第12期（历史，6.15-6.18）
         if game == 'dongfang':
             rounds.append({
@@ -723,11 +737,6 @@ def api_periods_game(game):
                 'platform': '东方财富模拟交易',
                 'status': 'ended'
             })
-            # 修正第12期：用11期结束金额作为初始
-            if rounds[0]['initial'] == 1000000:
-                rounds[0]['initial'] = 1033000
-                rounds[0]['profit'] = rounds[0]['total_assets'] - 1033000
-                rounds[0]['profit_pct'] = round(rounds[0]['profit'] / 1033000 * 100, 2) if 1033000 > 0 else 0
 
         data = {
             'round': round_name,

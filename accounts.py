@@ -37,9 +37,9 @@ ACCOUNTS = {
         'short_name': '东方财富',
         'platform': '东方财富模拟交易',
         'competition': '东方财富杯',
-        'round': '第13期',
-        'period': '2026.06.22 - 2026.06.26',
-        'initial': 1073000,  # 第12期结束时带入（收益率+3.87%）
+        'round': '第14期',
+        'period': '2026.06.29 - 2026.07.03',
+        'initial': 999000,  # 第13期结束时带入（收益率-6.90%）
         'api_key': get_key('dongfang'),
         'strategy_id': 'stock_momentum',
         'auto_trade': not is_pending('dongfang'),
