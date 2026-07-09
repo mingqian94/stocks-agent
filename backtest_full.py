@@ -9,91 +9,24 @@ import sys
 import pandas as pd
 import numpy as np
 import baostock as bs
+from backtest_common import get_index_data, ma_cross_signal, calc_max_drawdown_pct, calc_annualized_return_pct
 
 # 登录
 bs.login()
 
 
-def get_index_data(code, name, start_date="2016-01-01", end_date="2026-06-07"):
-    """获取指数历史数据"""
-    try:
-        rs = bs.query_history_k_data_plus(
-            code,
-            "date,open,high,low,close,volume",
-            start_date=start_date,
-            end_date=end_date,
-            frequency="d",
-            adjustflag="2"
-        )
-        
-        if rs.error_code != "0":
-            return None
-        
-        data_list = []
-        while rs.error_code == "0" and rs.next():
-            data_list.append(rs.get_row_data())
-        
-        if not data_list:
-            return None
-        
-        df = pd.DataFrame(data_list, columns=rs.fields)
-        df["date"] = pd.to_datetime(df["date"])
-        
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        
-        return df.dropna().sort_values("date").reset_index(drop=True)
-    
-    except:
-        return None
-
-
 def ma_cross_strategy(df):
-    """均线金叉策略"""
-    df = df.copy()
-    
-    # 均线
-    df["ma_short"] = df["close"].rolling(5).mean()
-    df["ma_long"] = df["close"].rolling(20).mean()
-    
-    # 信号
-    df["signal"] = 0
-    df.loc[(df["ma_short"] > df["ma_long"]) & (df["ma_short"].shift(1) <= df["ma_long"].shift(1)), "signal"] = 1
-    df.loc[(df["ma_short"] < df["ma_long"]) & (df["ma_short"].shift(1) >= df["ma_long"].shift(1)), "signal"] = -1
-    
-    # 持仓
-    df["position"] = df["signal"].replace(-1, 0).cumsum().clip(lower=0)
-    df["position"] = df["position"].apply(lambda x: 1 if x > 0 else 0)
-    
-    # 收益
-    df["daily_return"] = df["close"].pct_change()
-    df["strategy_return"] = df["position"].shift(1) * df["daily_return"]
-    
-    # 累计
-    df["cum_bh"] = (1 + df["daily_return"]).cumprod()
-    df["cum_strat"] = (1 + df["strategy_return"]).cumprod()
-    
-    # 最大回撤
-    rolling_max = df["cum_strat"].cummax()
-    df["drawdown"] = (df["cum_strat"] - rolling_max) / rolling_max
-    max_dd = df["drawdown"].min() * 100
-    
-    # 年化收益
+    """均线金叉策略，统计持有/策略的总收益、年化收益、最大回撤"""
+    df = ma_cross_signal(df, short_period=5, long_period=20)
     days = len(df)
-    years = days / 252
-    if years > 0:
-        annual_bh = (df["cum_bh"].iloc[-1] ** (1/years) - 1) * 100
-        annual_strat = (df["cum_strat"].iloc[-1] ** (1/years) - 1) * 100
-    else:
-        annual_bh = annual_strat = 0
-    
+
     return {
         "持有总收益": (df["cum_bh"].iloc[-1] - 1) * 100,
         "策略总收益": (df["cum_strat"].iloc[-1] - 1) * 100,
-        "持有年化": annual_bh,
-        "策略年化": annual_strat,
-        "最大回撤": max_dd,
-        "数据天数": len(df)
+        "持有年化": calc_annualized_return_pct(df["cum_bh"].iloc[-1], days),
+        "策略年化": calc_annualized_return_pct(df["cum_strat"].iloc[-1], days),
+        "最大回撤": calc_max_drawdown_pct(df["cum_strat"]),
+        "数据天数": days
     }
 
 

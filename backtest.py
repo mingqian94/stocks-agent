@@ -14,6 +14,7 @@ import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from backtest_common import ma_cross_signal, calc_max_drawdown_pct
 
 # 首先尝试安装需要的包
 try:
@@ -55,35 +56,8 @@ def get_etf_history(code, name, start_date="20250101", end_date="20260607"):
 
 
 def simple_ma_strategy(df, short_period=5, long_period=20):
-    """
-    简单均线策略回测
-    """
-    df = df.copy()
-    
-    # 计算均线
-    df["ma_short"] = df["close"].rolling(short_period).mean()
-    df["ma_long"] = df["close"].rolling(long_period).mean()
-    
-    # 生成信号
-    df["signal"] = 0
-    # 5日均线上穿20日均线：买入信号
-    df.loc[(df["ma_short"] > df["ma_long"]) & (df["ma_short"].shift(1) <= df["ma_long"].shift(1)), "signal"] = 1
-    # 5日均线下穿20日均线：卖出信号
-    df.loc[(df["ma_short"] < df["ma_long"]) & (df["ma_short"].shift(1) >= df["ma_long"].shift(1)), "signal"] = -1
-    
-    # 计算持仓
-    df["position"] = df["signal"].replace(-1, 0).cumsum()
-    df["position"] = df["position"].clip(lower=0, upper=1)
-    
-    # 计算策略收益
-    df["return"] = df["close"].pct_change()
-    df["strategy_return"] = df["return"] * df["position"].shift(1)
-    
-    # 累计收益
-    df["cum_return"] = (1 + df["return"]).cumprod()
-    df["cum_strategy_return"] = (1 + df["strategy_return"]).cumprod()
-    
-    return df
+    """简单均线策略回测（5日/20日金叉死叉，跟backtest_full.py是同一个策略）"""
+    return ma_cross_signal(df, short_period, long_period)
 
 
 def main():
@@ -109,9 +83,9 @@ def main():
             df_strat = simple_ma_strategy(df)
             
             # 计算指标
-            total_buy_hold = (df_strat["cum_return"].iloc[-1] - 1) * 100
-            total_strategy = (df_strat["cum_strategy_return"].iloc[-1] - 1) * 100
-            max_drawdown = (df_strat["cum_strategy_return"] / df_strat["cum_strategy_return"].cummax() - 1).min() * 100
+            total_buy_hold = (df_strat["cum_bh"].iloc[-1] - 1) * 100
+            total_strategy = (df_strat["cum_strat"].iloc[-1] - 1) * 100
+            max_drawdown = calc_max_drawdown_pct(df_strat["cum_strat"])
             
             results.append({
                 "ETF": etf["name"],

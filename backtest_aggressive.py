@@ -14,44 +14,17 @@ import os
 import pandas as pd
 import numpy as np
 import baostock as bs
+from backtest_common import get_index_data as _get_index_data, calc_max_drawdown_pct, calc_annualized_return_pct
 
 bs.login()
 
 
 def get_index_data(code, name, start_date="2016-01-01", end_date="2026-06-07"):
-    """获取指数历史数据"""
-    try:
-        rs = bs.query_history_k_data_plus(
-            code,
-            "date,open,high,low,close,volume",
-            start_date=start_date,
-            end_date=end_date,
-            frequency="d",
-            adjustflag="2"
-        )
-
-        if rs.error_code != "0":
-            print(f"  ❌ {name}: {rs.error_msg}")
-            return None
-
-        data_list = []
-        while rs.error_code == "0" and rs.next():
-            data_list.append(rs.get_row_data())
-
-        if not data_list:
-            return None
-
-        df = pd.DataFrame(data_list, columns=rs.fields)
-        df["date"] = pd.to_datetime(df["date"])
-
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-        return df.dropna().sort_values("date").reset_index(drop=True)
-
-    except Exception as e:
-        print(f"  ❌ {name}: {e}")
-        return None
+    """获取指数历史数据，失败时打印标的名（backtest_common版本不打印，这里补一句）"""
+    df = _get_index_data(code, name, start_date, end_date)
+    if df is None:
+        print(f"  ❌ {name}: 获取失败")
+    return df
 
 
 def aggressive_strategy(data_dict, lookback_days=5, rebalance_days=5):
@@ -144,26 +117,14 @@ def aggressive_strategy(data_dict, lookback_days=5, rebalance_days=5):
 
     # 计算指标
     days = len(combined)
-    years = days / 252
-
-    if years > 0:
-        annual_strat = (combined["cum_strat"].iloc[-1] ** (1/years) - 1) * 100
-        annual_bench = (combined["cum_bench"].iloc[-1] ** (1/years) - 1) * 100
-    else:
-        annual_strat = annual_bench = 0
-
-    # 最大回撤
-    rolling_max = combined["cum_strat"].cummax()
-    combined["drawdown"] = (combined["cum_strat"] - rolling_max) / rolling_max
-    max_dd = combined["drawdown"].min() * 100
 
     return {
         "总天数": days,
         "策略总收益": (combined["cum_strat"].iloc[-1] - 1) * 100,
         "基准总收益": (combined["cum_bench"].iloc[-1] - 1) * 100,
-        "策略年化": annual_strat,
-        "基准年化": annual_bench,
-        "最大回撤": max_dd,
+        "策略年化": calc_annualized_return_pct(combined["cum_strat"].iloc[-1], days),
+        "基准年化": calc_annualized_return_pct(combined["cum_bench"].iloc[-1], days),
+        "最大回撤": calc_max_drawdown_pct(combined["cum_strat"]),
         "调仓次数": (combined["rebalance"]).sum()
     }
 

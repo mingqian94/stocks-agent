@@ -32,6 +32,30 @@ MIN_INCREASE = 0.03        # 最小涨幅3%
 MAX_INCREASE = 0.12        # 最大涨幅12%
 MIN_AMOUNT = 200000000     # 最小成交额2亿
 
+
+def passes_candidate_filter(pct, amount, min_increase=MIN_INCREASE, max_increase=MAX_INCREASE, min_amount=MIN_AMOUNT):
+    """选股条件：涨幅在区间内 + 成交额达标"""
+    return min_increase <= pct <= max_increase and amount >= min_amount
+
+
+def should_stop_loss(profit_pct, stop_loss=STOP_LOSS):
+    """profit_pct 是百分数（比如-7.5表示-7.5%），stop_loss 是小数（比如-0.07）。
+    round()是因为 -0.07*100 在浮点数里是-7.000000000000001，正好卡在-7.0%的仓位不小心就漏判了"""
+    return profit_pct <= round(stop_loss * 100, 6)
+
+
+def should_take_profit(profit_pct, take_profit=TAKE_PROFIT):
+    """profit_pct 是百分数，take_profit 是小数"""
+    return profit_pct >= round(take_profit * 100, 6)
+
+
+def calc_buy_qty(avail_balance, price, position_pct=MAX_POSITION_SIZE):
+    """按仓位比例和可用资金算买入数量，整手（100股）"""
+    if price <= 0 or avail_balance <= 0:
+        return 0
+    buy_amount = avail_balance * position_pct
+    return int(buy_amount / price / 100) * 100
+
 def log(msg):
     """写日志：先打印到标准输出（nohup会重定向进console日志，作为兜底记录），
     再写文件；写文件失败不应该拖垮整个盯盘进程"""
@@ -73,7 +97,7 @@ def get_stock_candidates():
                     price = item.get('f2', 0) if item.get('f2') else 0  # clist接口f2已是元
 
                     # 筛选条件（pct已是小数形式，直接用小数阈值比较）
-                    if MIN_INCREASE <= pct <= MAX_INCREASE and amount >= MIN_AMOUNT:
+                    if passes_candidate_filter(pct, amount):
                         candidates.append({
                             'code': code,
                             'name': name,
@@ -226,11 +250,11 @@ def check_and_trade():
 
     # 止损止盈检查（只对活跃持仓）
     for h in active_holdings:
-        if h['profit_pct'] <= STOP_LOSS * 100:
+        if should_stop_loss(h['profit_pct']):
             log(f'  🚨 触发止损: {h["code"]} {h["profit_pct"]:+.2f}%')
             if AUTO_TRADE and h['avail'] > 0:
                 sell(h['code'], h['avail'], h['name'], h['current'])
-        elif h['profit_pct'] >= TAKE_PROFIT * 100:
+        elif should_take_profit(h['profit_pct']):
             log(f'  🎉 触发止盈: {h["code"]} {h["profit_pct"]:+.2f}%')
             if AUTO_TRADE and h['avail'] > 0:
                 sell(h['code'], h['avail'], h['name'], h['current'])
@@ -247,8 +271,7 @@ def check_and_trade():
 
             # 买入最强标的
             best = candidates[0]
-            buy_amount = avail_balance * MAX_POSITION_SIZE
-            buy_qty = int(buy_amount / best['price'] / 100) * 100  # 整手
+            buy_qty = calc_buy_qty(avail_balance, best['price'])
 
             if buy_qty >= 100:
                 log(f'  💡 建议买入: {best["code"]} {best["name"]} x{buy_qty}')

@@ -251,7 +251,13 @@ nohup python3 stock_auto_trade.py >> stock_trade.log 2>&1 &
 - ✅ 修复三个自动交易脚本7/2同时崩溃、无重启机制的问题：`log()` 写文件失败改为捕获异常，不再拖垮盯盘进程；已重新拉起
 - ✅ 清理孤儿脚本：`auto_trade_stock.py`、`backtest_v2.py`、`backtest_v3.py`、`backtest_rotation.py`
 - ✅ `dashboard.py` 的 `/api/periods/<game>` 从硬编码历史期数改为读 `accounts.PERIODS`
-- 🔴 发现 `dashboard.py` 的 `/api/trade`（手动买卖）引用未定义的 `APIURL`/`APIKEY`，是死代码，暂不修
+- ✅ 新增 `trade_logger.py`：所有成交（自动+手动）统一记进 `strategy_log.md`，加了 `flock` 防止并发写丢行
+- ✅ 新增 `botctl.py` + dashboard 的 Bot Status 面板：随时查看/停止/启动/重启三个交易进程
+- ✅ 收益分析加了真实净值折线图（从交易日志解析总资产快照），修了降采样丢最新点的问题
+- ✅ 删掉了 `/api/trade`（手动买卖）整套死代码——不是留着不修，是确认了这个项目不需要手动下单
+- ✅ 清理根目录调试脚本：`debug2.py`/`debug_api.py`/`check_api.py`/`check_orders.py`
+- ✅ `backtest.py`/`backtest_full.py`/`backtest_aggressive.py`/`backtest_conservative.py` 的数据获取和指标计算抽成 `backtest_common.py`
+- ✅ 新增 `tests/`：止损止盈/选股/仓位计算/均线信号的纯函数单测，35个全绿，顺带修了一个`should_stop_loss`浮点数精度bug
 
 ### 2026-06-16
 - ✅ 新增个股动量突破策略

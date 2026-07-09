@@ -234,6 +234,11 @@ stocks/
 | 崩溃/重启电脑后没有进程自动拉起来，可能再裸持仓 | 🔴 未解决（自动重启部分） | 试过launchd，被TCC挡住了（见下一条）。**已解决"如何发现+手动处理"部分**：`botctl.py`命令行 + dashboard的Bot Status面板，随时能看到三个进程状态并一键停/启/重启 |
 | `~/Documents`受TCC保护，launchd/cron等非交互进程访问不了，是7/2崩溃和launchd守护失败的共同根因 | 🔴 未解决 | 需要搬仓库出`~/Documents`或手动给python3授权完全磁盘访问，用户暂缓处理 |
 | 每周换期要手改accounts.py+dashboard.py+文档多处 | ✅ 已修复 | `accounts.py` 拆出 `PERIODS` 表，`ensure_current_period()` 跨周自动结算/开新期 |
-| Dashboard手动买卖按钮（`/api/trade`）引用未定义的`APIURL`/`APIKEY`，点击必报错 | 🔴 未修复 | 已确认是死代码，暂不使用手动下单，靠自动交易脚本 |
+| Dashboard手动买卖按钮（`/api/trade`）引用未定义的`APIURL`/`APIKEY`，点击必报错 | ✅ 已修复 | 手动下单不是这个项目要的（靠自动交易脚本），按钮/弹窗/接口整套删掉了，不是留着不修 |
 | 东方财富策略选股纪律可能导致某周零买入，被判定弃权（策略风控 vs 参赛规则打架） | 🔴 未解决 | 无自动兜底检查，需人工每周留意`stock_trade.log`有没有买入记录；第15期（7.6-7.10）就是人工手动补的一笔买入 |
 | 交易记录只在各账号自己的原始日志里，`strategy_log.md`没有统一的成交记录 | ✅ 已修复 | 新增`trade_logger.py`，`auto_trade.py`/`stock_auto_trade.py`的`buy()`/`sell()`成交后都会调用，统一写进`strategy_log.md`末尾的记录表，手动交易调用同样的函数也会记 |
+| `trade_logger.record_trade()`读写整个文件没加锁，三个进程几乎同时成交可能互相覆盖丢一行 | ✅ 已修复 | 加了`flock`独占锁，20并发写压测过，一行不丢 |
+| 折线图降采样可能丢最后一个真实数据点，右端比实际滞后 | ✅ 已修复 | 采样后强制把最后一个点换回真实值 |
+| `backtest.py`/`backtest_full.py`/`backtest_aggressive.py`/`backtest_conservative.py`重复了baostock数据获取和年化/回撤计算逻辑 | ✅ 已修复 | 抽成`backtest_common.py`（`get_index_data`/`ma_cross_signal`/`calc_max_drawdown_pct`/`calc_annualized_return_pct`），4个文件改成调用它；数值验证跟原实现完全一致才替换 |
+| 根目录一堆一次性调试脚本（`debug2.py`/`debug_api.py`/`check_api.py`/`check_orders.py`）没人清理，其中`check_orders.py`的`/entrust`接口还是坏的 | ✅ 已修复 | 确认无引用后删除 |
+| 止损止盈、选股、仓位计算等核心策略逻辑没有回归测试 | ✅ 已修复 | 抽出纯函数（`should_stop_loss`/`should_take_profit`/`passes_candidate_filter`/`calc_buy_qty`/`AutoTrader.calc_qty`），`tests/`下35个pytest单测全绿；顺带测出`should_stop_loss`有个浮点数精度bug（`-0.07*100`不是精确的`-7.0`，导致刚好-7.0%不触发止损），已修复 |

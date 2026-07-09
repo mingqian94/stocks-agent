@@ -672,3 +672,23 @@ _最后更新: 2026.06.15_
 
 7.3收盘净值是0.964（相对最初100万本金），也就是964,000元——用这个数字重新标定"上期（第14期）结束、本期（第15期）开始"的边界值，取代了之前用崩溃前最后一次日志快照（7.2 14:28，875,623元）估出来的-12.34%。更新后：第14期 99.9万→96.4万，收益率**-3.50%**；第15期初始资金也从875,623元改成964,000元。已同步改 `accounts.py` 的 `PERIODS` 表和 `STRATEGIES.md` 的历史收益表。
 
+---
+
+## 📅 2026.07.09（续）| 清理老账：backtest去重、删debug脚本、补单测
+
+### backtest 去重
+`backtest.py`/`backtest_full.py`/`backtest_aggressive.py`/`backtest_conservative.py` 四份脚本原来各自复制了一遍baostock数据获取（其中三份是逐字节完全相同的`get_index_data`）和年化收益/最大回撤计算。抽成 `backtest_common.py`，四份改成调用它。用固定的合成价格序列跑过新旧实现的数值对比，完全一致才替换的，不是"看起来差不多"。`stock_momentum_backtest.py` 用的是Backtrader+合成数据，跟其它四份没有共用逻辑，没有强行凑到一起。
+
+### 清理死代码
+删了 `debug2.py`/`debug_api.py`/`check_api.py`/`check_orders.py`——都是排查API返回格式时留下的一次性脚本，互相高度重复，`check_orders.py`打的`/entrust`接口本身还是坏的（返回东方财富官网首页HTML）。确认过都没有任何地方引用。
+
+### 补单测
+在 `tests/` 下加了35个pytest单测，覆盖止损止盈判断、选股筛选条件、仓位/数量计算、均线金叉信号、年化/回撤计算——全是不碰网络的纯函数单测。为了让这些逻辑能测，从 `stock_auto_trade.py` 里抽出了 `should_stop_loss`/`should_take_profit`/`passes_candidate_filter`/`calc_buy_qty` 几个纯函数（原来是写死在 `check_and_trade()` 里的行内判断）。
+
+**顺带测出一个真bug**：`should_stop_loss` 用 `profit_pct <= STOP_LOSS * 100` 判断止损，但 `-0.07 * 100` 在浮点数里其实是 `-7.000000000000001`，不是精确的 `-7.0`——如果仓位盈亏刚好是-7.00%，会漏判不触发止损。概率极低（真实API返回的盈亏几乎不可能是这么多位小数的精确值），但既然测出来了就顺手round()掉了。
+
+### 顺带发现
+`test_backtrader.py`（一个Backtrader手动烟雾测试脚本）文件名匹配pytest的收集规则，而且没有`if __name__=='__main__'`保护——裸跑`pytest`会把它当测试文件收集，执行里面的真实回测代码。改名成 `smoke_test_backtrader.py` 避开pytest收集。
+
+全部改动已跑过 `pytest tests/` 全绿（35 passed），三个交易进程和dashboard都重启过，代码是新的。
+
