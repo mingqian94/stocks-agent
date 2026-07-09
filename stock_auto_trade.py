@@ -22,9 +22,11 @@ APIURL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/mockTrading'
 LOG_FILE = '/Users/hetao/Documents/stocks/stock_trade.log'
 
 # ========== 策略参数 ==========
-MAX_POSITIONS = 1          # 最大持仓1只
-MAX_POSITION_SIZE = 0.95   # 单只仓位95%
-STOP_LOSS = -0.07          # 止损7%
+# 2026.07.09 调整：第13/14/15期连续三期负收益，落地第13期复盘时写的建议——
+# 单票95%仓位改成2只分散、止损从-7%收紧到-5%
+MAX_POSITIONS = 2          # 最大持仓2只（原1只，分散降低单票波动）
+MAX_POSITION_SIZE = 0.45   # 单只仓位45%（原95%，2只合计90%）
+STOP_LOSS = -0.05          # 止损5%（原-7%，收紧）
 TAKE_PROFIT = 0.20         # 止盈20%
 
 # 选股条件
@@ -259,8 +261,9 @@ def check_and_trade():
             if AUTO_TRADE and h['avail'] > 0:
                 sell(h['code'], h['avail'], h['name'], h['current'])
 
-    # 如果没有活跃持仓或未满，寻找买入机会
-    if len(active_holdings) < MAX_POSITIONS and avail_balance >= 50000:
+    # 如果没有活跃持仓或未满，寻找买入机会（可以补满到 MAX_POSITIONS 只）
+    open_slots = MAX_POSITIONS - len(active_holdings)
+    if open_slots > 0 and avail_balance >= 50000:
         log('  🔍 寻找买入机会...')
         candidates = get_stock_candidates()
 
@@ -269,14 +272,18 @@ def check_and_trade():
             for c in candidates[:5]:
                 log(f'    {c["code"]} {c["name"]} +{c["pct"]*100:.2f}% 成交额{c["amount"]/100000000:.1f}亿')
 
-            # 买入最强标的
-            best = candidates[0]
-            buy_qty = calc_buy_qty(avail_balance, best['price'])
+            held_codes = {h['code'] for h in active_holdings}
+            new_picks = [c for c in candidates if c['code'] not in held_codes][:open_slots]
 
-            if buy_qty >= 100:
-                log(f'  💡 建议买入: {best["code"]} {best["name"]} x{buy_qty}')
-                if AUTO_TRADE:
-                    buy(best['code'], buy_qty, best['name'], best['price'])
+            # 每只按 MAX_POSITION_SIZE 用同一份可用资金算仓位（不是买完一只再扣减），
+            # 这样MAX_POSITIONS只加起来正好是 MAX_POSITIONS * MAX_POSITION_SIZE 的总仓位
+            for best in new_picks:
+                buy_qty = calc_buy_qty(avail_balance, best['price'])
+                if buy_qty >= 100:
+                    log(f'  💡 建议买入: {best["code"]} {best["name"]} x{buy_qty}')
+                    if AUTO_TRADE:
+                        buy(best['code'], buy_qty, best['name'], best['price'])
+                        time.sleep(2)
         else:
             log('  暂无符合条件的个股')
 

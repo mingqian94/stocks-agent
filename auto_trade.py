@@ -7,7 +7,7 @@ import os
 import trade_logger
 
 # 导入统一配置
-from accounts import ACCOUNTS, STRATEGIES, get_account_with_strategy, get_strategy
+from accounts import ACCOUNTS, STRATEGIES, get_account_with_strategy, get_strategy, get_current_period
 from keys_config import get_skill_code
 
 # 平台API配置
@@ -101,6 +101,12 @@ class AutoTrader:
         self.strategy_id = self.account.get('strategy_id', '')
         self.strategy = STRATEGIES.get(self.strategy_id, {})
         self.auto_trade = self.account.get('auto_trade', False)
+
+        # 2026.07.09 之前这几个是全账户共用的模块常量，稳健/激进两个账户跑的是同一套风控，
+        # STRATEGIES里配的stop_loss/max_positions只是文档展示，代码没真正读过。现在按账户读：
+        self.momentum_top_n = self.strategy.get('max_positions', MOMENTUM_TOP_N)
+        self.stop_loss_day_pct = self.strategy.get('stop_loss', STOP_LOSS_DAY_PCT / 100) * 100
+        self.profit_floor = self.strategy.get('profit_floor')  # None表示没配地板，不做保护
 
         self.log_file = f'{LOG_DIR}/auto_trade_{account_key}.log'
 
@@ -355,6 +361,26 @@ class AutoTrader:
         self.log(f'总资产: {total_assets:.0f}元 | 可用: {avail_balance:.0f}元')
         self.log(f'持仓数量: {len(positions)}')
 
+        # 收益地板保护：本期收益跌到地板以下就清仓，本期剩余时间不再冒险
+        if self.profit_floor is not None:
+            period = get_current_period(self.account_key)
+            initial = period.get('initial') if period else None
+            if initial:
+                period_profit_pct = (total_assets - initial) / initial
+                if period_profit_pct <= self.profit_floor:
+                    self.log(f'🛑 触发收益地板保护: 本期收益{period_profit_pct*100:+.2f}% <= 地板{self.profit_floor*100:.0f}%，清仓保护，本期不再买入')
+                    if self.auto_trade:
+                        for p in positions:
+                            code = p.get('secCode') or p.get('stockCode') or p.get('code')
+                            name = p.get('secName') or p.get('stockName') or p.get('name')
+                            avail_count = p.get('availCount', 0)
+                            price = p.get('price', 0) or 0
+                            if avail_count > 0 and price > 0:
+                                self.sell(code, avail_count, price=price)
+                                time.sleep(2)
+                    self.log('========= 本轮结束（地板保护） =========\n')
+                    return
+
         pos_map = {}
         pos_pct_map = {}
         alert_messages = []
@@ -385,7 +411,7 @@ class AutoTrader:
             pos_pct_map[code] = day_pct
             p['_day_pct'] = day_pct  # 缓存
 
-            if day_pct <= STOP_LOSS_DAY_PCT:
+            if day_pct <= self.stop_loss_day_pct:
                 alert_msg = f'🚨 【止损提醒】{name}({code}) 今日跌幅{day_pct:.2f}%，建议减半仓！'
                 self.log(f'  {alert_msg}')
                 alert_messages.append(alert_msg)
@@ -419,7 +445,7 @@ class AutoTrader:
             top_list = [(ETFS.get(c, c), f'{q["pct"]:.2f}%') for c, q in sorted_etfs]
             self.log(f'📊 动量排名: {top_list}')
 
-            top_codes = [c for c, q in sorted_etfs[:MOMENTUM_TOP_N] if q['pct'] > 0]
+            top_codes = [c for c, q in sorted_etfs[:self.momentum_top_n] if q['pct'] > 0]
             if top_codes:
                 self.log(f'\n--- 交易建议 ---')
                 self.log(f'  🌟 推荐买入: {[ETFS.get(c, c) for c in top_codes]}')

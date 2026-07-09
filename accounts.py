@@ -70,6 +70,7 @@ STRATEGIES = {
         'max_positions': 2,
         'position_size': 0.45,
         'target_return': 0.30,
+        'profit_floor': 0.08,  # 本期收益跌到8%以下就清仓保护，本期不再买入
         'risk_level': '高',
         'color': '#00ff88'
     },
