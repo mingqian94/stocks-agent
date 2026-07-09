@@ -10,7 +10,7 @@ from flask import Flask, render_template, jsonify
 sys.path.insert(0, '/Users/hetao/Documents/stocks')
 
 # 导入账户配置
-from accounts import ACCOUNTS, STRATEGIES, get_accounts_for_dashboard, get_account_with_strategy
+from accounts import ACCOUNTS, STRATEGIES, PERIODS, get_accounts_for_dashboard, get_account_with_strategy, ensure_current_period, get_current_period
 
 app = Flask(__name__)
 
@@ -233,7 +233,13 @@ def api_positions(game):
     if pos:
         total_assets = pos.get('totalAssets', 0) / 1000
         avail_balance = pos.get('availBalance', 0) / 1000
-        initial = config.get('initial', 1000000)
+        # 东方财富杯每周一期：跨周时用当前实时总资产自动结算上一期、开启新一期
+        ensure_current_period(account_key, live_total_assets=total_assets)
+        current_period = get_current_period(account_key)
+        config['round'] = current_period.get('round', config.get('round', ''))
+        config['period'] = current_period.get('period', config.get('period', ''))
+        config['initial'] = current_period.get('initial', config.get('initial', 1000000))
+        initial = config['initial']
         total_profit = total_assets - initial
         profit_pct = (total_profit / initial) * 100
         
@@ -617,27 +623,17 @@ def api_stock_strategy_status():
 
 @app.route('/api/periods/<game>')
 def api_periods_game(game):
-    """获取指定账户的期数数据（从accounts配置读取）"""
+    """获取指定账户的期数数据 —— 历史全部来自 accounts.PERIODS，不再硬编码某一期的数字"""
     try:
-        accounts_data = get_accounts_for_dashboard()
-        account = None
-        for acc in accounts_data:
-            if acc['id'] == game:
-                account = acc
-                break
-
+        game_to_account_key = {'dongfang': 'east_money', 'huatai_7493': 'ht_7493', 'huatai_8268': 'ht_8268'}
+        account_key = game_to_account_key.get(game)
+        account = get_account_with_strategy(account_key) if account_key else None
         if not account:
             return jsonify({'success': False, 'message': '账户不存在'})
 
-        # 从accounts配置（PERIODS表）生成期数信息
-        round_name = account.get('round', account['competition'])
-        period = account.get('period', '')
-        initial = account.get('initial', 1000000)
-
-        # 获取当前资产
-        total_assets = initial
-        avail_balance = initial
-
+        # 获取当前资产（实时）
+        total_assets = account.get('initial', 1000000)
+        avail_balance = total_assets
         try:
             if game == 'dongfang':
                 # 注意：/account 端点返回302，改用 /positions 获取资产
@@ -650,8 +646,8 @@ def api_periods_game(game):
                     if str(result.get('code', '')) == '200' or result.get('code') == 200:
                         d = result.get('data', {})
                         # 东方财富API返回元，除1000转为千元（与前端单位一致）
-                        total_assets = float(d.get('totalAssets', initial)) / 1000
-                        avail_balance = float(d.get('availBalance', initial)) / 1000
+                        total_assets = float(d.get('totalAssets', total_assets)) / 1000
+                        avail_balance = float(d.get('availBalance', avail_balance)) / 1000
             elif game.startswith('huatai'):
                 api_key = HT_APIKEY_7493 if game == 'huatai_7493' else HT_APIKEY_8268
                 headers = {'apiKey': api_key, 'Content-Type': 'application/json', 'skillCode': HT_SKILL_CODE}
@@ -661,84 +657,41 @@ def api_periods_game(game):
                     result = r.json()
                     if result.get('ok'):
                         d = result.get('data', {})
-                        total_assets = float(d.get('totalAssets', initial))
-                        avail_balance = float(d.get('availableAmount', initial))
+                        total_assets = float(d.get('totalAssets', total_assets))
+                        avail_balance = float(d.get('availableAmount', avail_balance))
         except:
             pass
 
-        # 东方财富第13期：初始资金=第12期结束时带入
-        if game == 'dongfang':
-            initial = 1073000
+        # 东方财富杯每周一期：跨周时自动结算上一期、开新一期
+        if account_key in ('east_money',):
+            ensure_current_period(account_key, live_total_assets=total_assets)
+            account = get_account_with_strategy(account_key)
 
+        initial = account.get('initial', 1000000)
         profit = total_assets - initial
         profit_pct = round(profit / initial * 100, 2) if initial > 0 else 0
 
-        # 第14期（当前）
-        # 东方财富第14期初始资金 = 第13期结束带入（硬编码，防止accounts模块缓存）
-        effective_initial = 999000 if game == 'dongfang' else initial
-        current_round = {
-            'round': round_name,
-            'period': period,
-            'initial': effective_initial,
-            'total_assets': total_assets,
-            'avail_balance': avail_balance,
-            'profit': total_assets - effective_initial,
-            'profit_pct': round((total_assets - effective_initial) / effective_initial * 100, 2),
-            'competition': account.get('competition', ''),
-            'platform': account.get('platform', ''),
-            'status': account.get('status', 'active')
-        }
-
-        # 东方财富多期历史（最新在前）
+        # 历史 + 当前周期（最新在前），全部来自 PERIODS 表
+        account_periods = PERIODS.get(account_key, [])
         rounds = []
-        # 第14期（当前）
-        rounds.append(current_round)
-        # 第13期（历史，6.22-6.26）
-        if game == 'dongfang':
+        for i, p in enumerate(reversed(account_periods)):
+            is_current = (i == 0)
             rounds.append({
-                'round': '第13期',
-                'period': '2026.06.22 - 2026.06.26',
-                'initial': 1073000,
-                'total_assets': 999000,
-                'avail_balance': 0,
-                'profit': -74000,
-                'profit_pct': -6.90,
-                'competition': '东方财富杯',
-                'platform': '东方财富模拟交易',
-                'status': 'ended'
-            })
-        # 第12期（历史，6.15-6.18）
-        if game == 'dongfang':
-            rounds.append({
-                'round': '第12期',
-                'period': '2026.06.15 - 2026.06.18',
-                'initial': 1033000,
-                'total_assets': 1073000,
-                'avail_balance': 0,
-                'profit': 40000,
-                'profit_pct': 3.87,
-                'competition': '东方财富杯',
-                'platform': '东方财富模拟交易',
-                'status': 'ended'
-            })
-        # 第11期（历史数据）
-        if game == 'dongfang':
-            rounds.append({
-                'round': '第11期',
-                'period': '2026.06.08 - 2026.06.12',
-                'initial': 1000000,
-                'total_assets': 1033000,
-                'avail_balance': 0,
-                'profit': 33000,
-                'profit_pct': 3.30,
-                'competition': '东方财富杯',
-                'platform': '东方财富模拟交易',
-                'status': 'ended'
+                'round': p['round'],
+                'period': p['period'],
+                'initial': p['initial'],
+                'total_assets': total_assets if is_current else p.get('final', p['initial']),
+                'avail_balance': avail_balance if is_current else 0,
+                'profit': profit if is_current else (p.get('final', p['initial']) - p['initial']),
+                'profit_pct': profit_pct if is_current else (p.get('profit_pct') or 0),
+                'competition': account.get('competition', ''),
+                'platform': account.get('platform', ''),
+                'status': 'active' if is_current else 'ended'
             })
 
         data = {
-            'round': round_name,
-            'period': period,
+            'round': account.get('round', ''),
+            'period': account.get('period', ''),
             'initial': initial,
             'total_assets': total_assets,
             'avail_balance': avail_balance,

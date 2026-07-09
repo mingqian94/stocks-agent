@@ -5,6 +5,8 @@
 #   ACCOUNTS  —— 账号身份（平台、api_key、绑定的策略），基本不变
 #   STRATEGIES —— 策略定义（选股/止损止盈参数），随策略调优才变
 #   PERIODS   —— 比赛周期战绩（每期起止时间、初始/期末资金），每期比赛都会新增一条
+import datetime
+import re
 from keys_config import get_key, is_pending
 
 ACCOUNTS = {
@@ -108,7 +110,9 @@ PERIODS = {
         {'round': '第11期', 'period': '6.08-6.12', 'initial': 1000000, 'final': 1033000, 'profit_pct': 3.30, 'status': 'done'},
         {'round': '第12期', 'period': '6.15-6.18', 'initial': 1033000, 'final': 1073000, 'profit_pct': 3.87, 'status': 'done'},
         {'round': '第13期', 'period': '6.22-6.26', 'initial': 1073000, 'final': 999000, 'profit_pct': -6.90, 'status': 'done'},
-        {'round': '第14期', 'period': '6.29-7.3', 'initial': 999000, 'final': None, 'profit_pct': None, 'status': 'active'},
+        # final 取自 7.2 14:28 崩溃前最后一次日志快照（自动交易脚本当天崩溃，缺 7.3 一天数据，属估算）
+        {'round': '第14期', 'period': '6.29-7.3', 'initial': 999000, 'final': 875623, 'profit_pct': -12.34, 'status': 'done'},
+        {'round': '第15期', 'period': '7.6-7.10', 'initial': 875623, 'final': None, 'profit_pct': None, 'status': 'active'},
     ],
     'ht_7493': [
         {'round': '初赛', 'period': '2026.06.11 - 2026.07.20', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
@@ -149,6 +153,53 @@ def add_period(account_id, round_name, period_str, initial, final=None, profit_p
         'profit_pct': profit_pct,
         'status': status
     })
+
+# 每周滚动一期的账号（东方财富杯规则：每周一期）；华泰是初赛长周期，不在这里滚动
+WEEKLY_ROLLING_ACCOUNTS = {'east_money'}
+
+def _week_bounds(d):
+    """d 所在自然周的周一/周五日期"""
+    monday = d - datetime.timedelta(days=d.weekday())
+    friday = monday + datetime.timedelta(days=4)
+    return monday, friday
+
+def _fmt_period(monday, friday):
+    return f"{monday.month}.{monday.day}-{friday.month}.{friday.day}"
+
+def _next_round_name(last_round):
+    m = re.search(r'\d+', last_round or '')
+    return f'第{int(m.group()) + 1}期' if m else '第1期'
+
+def ensure_current_period(account_id, live_total_assets=None):
+    """
+    检查该账号是否已经跨入新的一周；如果是，自动结算上一期（final/profit_pct 用
+    live_total_assets 回填）并追加新一期（initial 沿用同一个数字，因为账户资金是连续的，
+    只是按周分段记录战绩）。只对 WEEKLY_ROLLING_ACCOUNTS 里的账号生效，其余账号原样返回
+    当前周期，不做任何滚动。建议在每次拿到账户实时总资产的地方调用（比如 dashboard 的
+    positions 接口），这样换周当天第一次访问就会自动结算，不用手改 accounts.py。
+    """
+    if account_id not in WEEKLY_ROLLING_ACCOUNTS:
+        return get_current_period(account_id)
+
+    monday, friday = _week_bounds(datetime.date.today())
+    current_period_str = _fmt_period(monday, friday)
+
+    periods = PERIODS.get(account_id, [])
+    if periods and periods[-1]['period'] == current_period_str:
+        return periods[-1]
+
+    if not periods:
+        return get_current_period(account_id)
+
+    prev = periods[-1]
+    if live_total_assets is not None:
+        prev['final'] = live_total_assets
+        prev['profit_pct'] = round((live_total_assets - prev['initial']) / prev['initial'] * 100, 2)
+    prev['status'] = 'done'
+
+    initial = live_total_assets if live_total_assets is not None else prev.get('final') or prev['initial']
+    add_period(account_id, _next_round_name(prev['round']), current_period_str, initial, status='active')
+    return get_current_period(account_id)
 
 def get_account_with_strategy(account_id):
     """获取账户 + 策略 + 当前周期战绩"""
