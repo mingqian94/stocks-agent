@@ -724,3 +724,16 @@ _最后更新: 2026.06.15_
 
 补了7个测试到`tests/test_auto_trade.py`：确认两个账户读到的`momentum_top_n`/`stop_loss_day_pct`/`profit_floor`不一样，另外3个用mock模拟"本期收益跌到7%"验证地板保护真的会调用`sell()`清仓、"20%时不触发"、"7493没配地板不会被误清仓"。全部45个测试（原36+新9）跑绿。三个交易进程已重启，跑的是新参数。
 
+---
+
+## 📅 2026.07.09（续）| 三个账号都改成满仓，不留现金缓冲
+
+用户备注："可以满仓，因为咱们没有补仓策略"——之前三个策略的仓位公式都留了10%左右的现金缓冲（`stock_auto_trade.py`单只45%×2=90%，`auto_trade.py`里`per_target = avail_balance2 / len(top_codes) * 0.9`）。这个缓冲的隐含前提是"跌了之后可能要补仓摊低成本"，但这三个策略都没有补仓/加仓逻辑——止损就是止损，卖出就是卖出，不会往下跌的仓位里加钱，所以留着这10%现金没有意义，闲置反而拉低总收益。
+
+改动：
+- `stock_auto_trade.py`: `MAX_POSITION_SIZE` 0.45 → 0.5（2只合计满仓100%）
+- `auto_trade.py`: `per_target`公式去掉`* 0.9`，改成`avail_balance2 / len(top_codes)`（华泰7493/8268都受影响）
+- `accounts.py`的`STRATEGIES`字典同步更新`position_size`字段（顺带发现`stock_momentum`那条其实还停在改参数之前的旧值——止损-7%、1只95%——从来没跟`stock_auto_trade.py`的常量同步过，dashboard一直显示的是过期参数，这次一起修了）
+
+45个测试跑绿（涉及仓位公式的测试用的是显式传参或`sat.MAX_POSITION_SIZE`动态引用，不受这次改动影响）。三个交易进程已重启。
+

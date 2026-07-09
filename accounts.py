@@ -55,7 +55,7 @@ STRATEGIES = {
         'panel': 'etf',
         'stop_loss': -0.03,
         'max_positions': 3,
-        'position_size': 0.30,
+        'position_size': 0.3333,  # 满仓：3只均分100%，不留现金缓冲（没有补仓策略不需要）
         'target_return': 0.08,
         'risk_level': '低',
         'color': '#00d4ff'
@@ -68,7 +68,7 @@ STRATEGIES = {
         'panel': 'etf',
         'stop_loss': -0.05,
         'max_positions': 2,
-        'position_size': 0.45,
+        'position_size': 0.5,  # 满仓：2只均分100%
         'target_return': 0.30,
         'profit_floor': 0.08,  # 本期收益跌到8%以下就清仓保护，本期不再买入
         'risk_level': '高',
@@ -80,13 +80,13 @@ STRATEGIES = {
         'type': '个股动量',
         'desc': '监测A股实时涨跌幅，买入动量排名前列且符合条件（涨幅3%-12%、成交额>2亿）的强势个股',
         'panel': 'stock',
-        'stop_loss': -0.07,
+        'stop_loss': -0.05,
         'take_profit': 0.20,
         'min_increase': 0.03,
         'max_increase': 0.12,
         'min_amount': 200000000,
-        'max_positions': 1,
-        'position_size': 0.95,
+        'max_positions': 2,
+        'position_size': 0.5,  # 满仓：2只均分100%（原1只95%单票）
         'target_return': 0.10,
         'risk_level': '高',
         'color': '#ff4757'

@@ -476,7 +476,8 @@ class AutoTrader:
                     avail_balance2 = pos2.get('availBalance', 0)
 
                     if avail_balance2 >= MIN_BUY_CASH:
-                        per_target = avail_balance2 / len(top_codes) * 0.9
+                        # 满仓投入，不留现金缓冲——没有补仓/加仓策略，不需要预留资金摊低成本
+                        per_target = avail_balance2 / len(top_codes)
                         self.log(f'  💰 可用{avail_balance2:.0f}元，每只计划{per_target:.0f}元')
                         for code in top_codes:
                             q = quotes.get(code)

@@ -60,7 +60,7 @@
 |------|-----|
 | 监测ETF数量 | 22只 |
 | 持仓上限 | 3只 |
-| 每只仓位 | 30% |
+| 每只仓位 | 33.3%（3只满仓，不留现金缓冲——没有补仓策略不需要） |
 | 止损线 | -3% |
 | 买入条件 | 动量排名前2 + 涨幅>0 |
 | 卖出条件 | 不在Top2 且 涨幅<0 |
@@ -87,7 +87,7 @@
 |------|-----|
 | 监测ETF数量 | 22只 |
 | 持仓上限 | 2只 |
-| 每只仓位 | 45% |
+| 每只仓位 | 50%（2只满仓，不留现金缓冲——没有补仓策略不需要） |
 | 止损线 | -5% |
 | 买入条件 | 动量排名前2 + 涨幅>0 |
 | 卖出条件 | 不在Top2 且 涨幅<0 |
@@ -119,7 +119,7 @@
 | 最大涨幅 | 12% |
 | 最小成交额 | 2亿 |
 | 持仓上限 | 2只 |
-| 每只仓位 | 45% |
+| 每只仓位 | 50%（2只满仓，不留现金缓冲——没有补仓策略不需要） |
 | 止损线 | -5% |
 | 止盈线 | +20% |
 | 持仓数量 | 最多2只（原1只满仓，分散降低波动） |
@@ -247,3 +247,6 @@ stocks/
 | `backtest.py`/`backtest_full.py`/`backtest_aggressive.py`/`backtest_conservative.py`重复了baostock数据获取和年化/回撤计算逻辑 | ✅ 已修复 | 抽成`backtest_common.py`（`get_index_data`/`ma_cross_signal`/`calc_max_drawdown_pct`/`calc_annualized_return_pct`），4个文件改成调用它；数值验证跟原实现完全一致才替换 |
 | 根目录一堆一次性调试脚本（`debug2.py`/`debug_api.py`/`check_api.py`/`check_orders.py`）没人清理，其中`check_orders.py`的`/entrust`接口还是坏的 | ✅ 已修复 | 确认无引用后删除 |
 | 止损止盈、选股、仓位计算等核心策略逻辑没有回归测试 | ✅ 已修复 | 抽出纯函数（`should_stop_loss`/`should_take_profit`/`passes_candidate_filter`/`calc_buy_qty`/`AutoTrader.calc_qty`），`tests/`下35个pytest单测全绿；顺带测出`should_stop_loss`有个浮点数精度bug（`-0.07*100`不是精确的`-7.0`，导致刚好-7.0%不触发止损），已修复 |
+| 稳健/激进两个华泰账户代码里实际共用同一套风控（`STOP_LOSS_DAY_PCT`/`MOMENTUM_TOP_N`模块常量），`STRATEGIES`字典配的参数从未被读取 | ✅ 已修复 | `AutoTrader.__init__`改成从`self.strategy`读取，8268真正Top2/-5%止损；新增8%收益地板保护 |
+| `accounts.py`的`STRATEGIES['stock_momentum']`还是止损-7%/单只95%/1只的旧值，跟`stock_auto_trade.py`实际用的常量不一致，dashboard显示的策略参数是过期的 | ✅ 已修复 | 同步成-5%/2只/每只50%，跟代码常量对齐 |
+| 三个策略的仓位公式都留了10%现金缓冲（`*0.9`），但没有补仓/加仓策略，不需要预留资金摊低成本 | ✅ 已修复 | 改成满仓：`stock_auto_trade.py`单只仓位0.45→0.5，`auto_trade.py`的`*0.9`去掉；`STRATEGIES`字典的`position_size`同步更新 |
