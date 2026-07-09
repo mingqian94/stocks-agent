@@ -90,16 +90,6 @@ STRATEGIES = {
         'risk_level': '高',
         'color': '#ff4757'
     },
-    'manual': {
-        'id': 'manual',
-        'name': '手动操作',
-        'type': '手动',
-        'desc': '手动操作，待开赛后启用',
-        'panel': 'etf',
-        'target_return': 0,
-        'risk_level': '未知',
-        'color': '#ffb74d'
-    },
 }
 
 # 比赛周期战绩表：每个账号一份按时间排序的列表，最后一条是当前/最新一期。
