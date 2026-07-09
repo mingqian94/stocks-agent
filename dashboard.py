@@ -4,7 +4,8 @@ import requests
 import sys
 import os
 import re
-from flask import Flask, render_template, jsonify
+import botctl
+from flask import Flask, render_template, jsonify, request
 
 # 添加路径
 sys.path.insert(0, '/Users/hetao/Documents/stocks')
@@ -735,6 +736,28 @@ def api_trade():
                 return jsonify({'success': True, 'data': d.get('data', {})})
             return jsonify({'success': False, 'message': d.get('message', '未知错误')})
         return jsonify({'success': False, 'message': f'HTTP {r.status_code}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/bots/status')
+def api_bots_status():
+    """三个自动交易进程是否在跑 + 最后一条日志"""
+    try:
+        return jsonify({'success': True, 'bots': botctl.get_status()})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/bots/<action>', methods=['POST'])
+def api_bots_action(action):
+    """手动停止/启动/重启自动交易进程。action: stop/start/restart，body: {"name": "ht_7493"|"ht_8268"|"east_money"|"all"}"""
+    if action not in ('stop', 'start', 'restart'):
+        return jsonify({'success': False, 'message': f'不支持的操作: {action}'})
+    name = (request.json or {}).get('name', 'all')
+    if name != 'all' and name not in botctl.BOTS:
+        return jsonify({'success': False, 'message': f'账号不存在: {name}'})
+    try:
+        getattr(botctl, action)(name)
+        return jsonify({'success': True, 'bots': botctl.get_status()})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 

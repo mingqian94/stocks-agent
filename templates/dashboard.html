@@ -697,6 +697,28 @@
             </div>
         </div>
 
+        <!-- 交易机器人状态 -->
+        <div class="card" style="margin-bottom:20px;">
+            <div class="positions-header">
+                <h3>🤖 Bot Status 交易机器人状态</h3>
+                <button class="btn" onclick="refreshBotStatus()">🔄 刷新</button>
+            </div>
+            <table class="positions-table" id="botStatusTable">
+                <thead>
+                    <tr>
+                        <th>账号</th>
+                        <th>状态</th>
+                        <th>PID</th>
+                        <th>最后一条日志</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="botStatusBody">
+                    <tr><td colspan="5" style="color:#666;">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <!-- 期数收益统计 -->
         <div class="card" style="margin-bottom:20px;">
             <h3>🏆 Round History 期数收益</h3>
@@ -976,6 +998,46 @@
                 updateProfitDisplay();
             });
         });
+
+        async function refreshBotStatus() {
+            try {
+                const response = await fetch('/api/bots/status');
+                const data = await response.json();
+                if (!data.success) return;
+                const body = document.getElementById('botStatusBody');
+                body.innerHTML = data.bots.map(b => `
+                    <tr>
+                        <td>${b.label}</td>
+                        <td style="color:${b.running ? '#00ff88' : '#ff4757'};">${b.running ? '✅ 运行中' : '❌ 未运行'}</td>
+                        <td>${b.pids.join(',') || '-'}</td>
+                        <td style="font-size:12px; color:#999; max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${b.last_log}</td>
+                        <td>
+                            <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','${b.running ? 'stop' : 'start'}')">${b.running ? '停止' : '启动'}</button>
+                            <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','restart')">重启</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('加载机器人状态失败', error);
+            }
+        }
+
+        async function botAction(name, action) {
+            const labelMap = {stop: '停止', start: '启动', restart: '重启'};
+            if (!confirm(`确定要${labelMap[action]} ${name} 吗？`)) return;
+            try {
+                const response = await fetch(`/api/bots/${action}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+                const data = await response.json();
+                if (!data.success) alert('操作失败: ' + data.message);
+                refreshBotStatus();
+            } catch (error) {
+                alert('请求失败: ' + error);
+            }
+        }
 
         function refreshData() {
             loadPositions();
@@ -1385,9 +1447,11 @@
 
             // 3. 加载数据
             refreshData();
+            refreshBotStatus();
 
             // 4. 定时刷新
             setInterval(refreshData, 180000);
+            setInterval(refreshBotStatus, 30000);
         }
 
         init();

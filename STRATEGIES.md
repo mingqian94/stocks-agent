@@ -188,6 +188,20 @@ nohup python3 auto_trade.py ht_8268 >> auto_trade_ht_8268.log 2>&1 &
 nohup python3 stock_auto_trade.py >> stock_trade.log 2>&1 &
 ```
 
+## 🕹️ 手动查看/停止/启动交易进程
+
+不想每次都靠Claude或者记PID，两个入口都能看到三个进程的实时状态并操作：
+
+**命令行**（不依赖dashboard是否在跑）：
+```bash
+python3 botctl.py status            # 查看状态
+python3 botctl.py stop [账号|all]    # 停止，账号: ht_7493 / ht_8268 / east_money
+python3 botctl.py start [账号|all]
+python3 botctl.py restart [账号|all]
+```
+
+**网页**：dashboard 首页顶部有一张"🤖 Bot Status"卡片，实时显示三个进程是否在跑、PID、最后一条日志，每个都有停止/启动/重启按钮（背后调的是 `/api/bots/status`、`/api/bots/<stop|start|restart>`，跟命令行工具是同一套逻辑）。
+
 ---
 
 ## 📁 项目文件结构
@@ -217,7 +231,7 @@ stocks/
 | 个股数据toFixed报错 | ✅ 已修复 | 增加类型检查 |
 | 东方财富第13期初始资金 | ✅ 已修正 | 107.3万（第12期带入） |
 | 三个自动交易脚本7/2同时崩溃（写日志时PermissionError） | ✅ 已缓解 | log()写文件失败改为捕获异常打印警告，不再拖垮整个进程；已重新拉起 |
-| 崩溃/重启电脑后没有进程自动拉起来，可能再裸持仓 | 🔴 未解决 | 试过launchd，被TCC挡住了（见下一条），暂时靠手动`nohup`，用户已知晓并接受这个风险 |
+| 崩溃/重启电脑后没有进程自动拉起来，可能再裸持仓 | 🔴 未解决（自动重启部分） | 试过launchd，被TCC挡住了（见下一条）。**已解决"如何发现+手动处理"部分**：`botctl.py`命令行 + dashboard的Bot Status面板，随时能看到三个进程状态并一键停/启/重启 |
 | `~/Documents`受TCC保护，launchd/cron等非交互进程访问不了，是7/2崩溃和launchd守护失败的共同根因 | 🔴 未解决 | 需要搬仓库出`~/Documents`或手动给python3授权完全磁盘访问，用户暂缓处理 |
 | 每周换期要手改accounts.py+dashboard.py+文档多处 | ✅ 已修复 | `accounts.py` 拆出 `PERIODS` 表，`ensure_current_period()` 跨周自动结算/开新期 |
 | Dashboard手动买卖按钮（`/api/trade`）引用未定义的`APIURL`/`APIKEY`，点击必报错 | 🔴 未修复 | 已确认是死代码，暂不使用手动下单，靠自动交易脚本 |
