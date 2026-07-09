@@ -4,6 +4,7 @@ import requests
 import datetime
 import sys
 import os
+import trade_logger
 
 # 导入统一配置
 from accounts import ACCOUNTS, STRATEGIES, get_account_with_strategy, get_strategy
@@ -263,12 +264,14 @@ class AutoTrader:
                     if str(d.get('code')) == '200':
                         order_id = d.get('data', {}).get('orderID', '?')
                         self.log(f'  ✅ 买入成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
+                        trade_logger.record_trade(self.account.get('name', ''), 'buy', code, ETFS.get(code, ''), qty, price, order_id)
                         return True
                     self.log(f'  ⚠️ 买入失败: {code} {d.get("message", "未知")}')
                 else:
                     if d.get('ok'):
                         order_id = d.get('data', {}).get('orderID', '?')
                         self.log(f'  ✅ 买入成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
+                        trade_logger.record_trade(self.account.get('name', ''), 'buy', code, ETFS.get(code, ''), qty, price, order_id)
                         return True
                     err = d.get('error', {})
                     self.log(f'  ⚠️ 买入失败: {code} {err.get("message", str(err))}')
@@ -303,12 +306,14 @@ class AutoTrader:
                     if str(d.get('code')) == '200':
                         order_id = d.get('data', {}).get('orderID', '?')
                         self.log(f'  ✅ 卖出成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
+                        trade_logger.record_trade(self.account.get('name', ''), 'sell', code, ETFS.get(code, ''), qty, price, order_id)
                         return True
                     self.log(f'  ⚠️ 卖出失败: {code} {d.get("message", "未知")}')
                 else:
                     if d.get('ok'):
                         order_id = d.get('data', {}).get('orderID', '?')
                         self.log(f'  ✅ 卖出成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
+                        trade_logger.record_trade(self.account.get('name', ''), 'sell', code, ETFS.get(code, ''), qty, price, order_id)
                         return True
                     err = d.get('error', {})
                     self.log(f'  ⚠️ 卖出失败: {code} {err.get("message", str(err))}')

@@ -9,6 +9,7 @@ import time
 import requests
 import datetime
 import sys
+import trade_logger
 
 # ⚠️ API Key 统一从 keys_config.py 读取，不要在这里写死
 from accounts import get_current_account
@@ -103,7 +104,7 @@ def get_quote(code):
         pass
     return None
 
-def buy(code, qty):
+def buy(code, qty, name='', price=None, source='自动'):
     """买入"""
     try:
         r = requests.post(f'{APIURL}/trade',
@@ -113,7 +114,9 @@ def buy(code, qty):
         if r.status_code == 200:
             d = r.json()
             if str(d.get('code')) == '200':
-                log(f'  ✅ 买入成功: {code} x{qty} 委托号: {d.get("data",{}).get("orderID","?")}')
+                order_id = d.get('data', {}).get('orderID', '?')
+                log(f'  ✅ 买入成功: {code} x{qty} 委托号: {order_id}')
+                trade_logger.record_trade(ACCOUNT_NAME, 'buy', code, name, qty, price, order_id, source)
                 return True
             log(f'  ⚠️ 买入失败: {code} {d.get("message","未知")}')
         else:
@@ -122,7 +125,7 @@ def buy(code, qty):
         log(f'  ⚠️ 买入异常 {code}: {e}')
     return False
 
-def sell(code, qty):
+def sell(code, qty, name='', price=None, source='自动'):
     """卖出"""
     try:
         r = requests.post(f'{APIURL}/trade',
@@ -132,7 +135,9 @@ def sell(code, qty):
         if r.status_code == 200:
             d = r.json()
             if str(d.get('code')) == '200':
-                log(f'  ✅ 卖出成功: {code} x{qty} 委托号: {d.get("data",{}).get("orderID","?")}')
+                order_id = d.get('data', {}).get('orderID', '?')
+                log(f'  ✅ 卖出成功: {code} x{qty} 委托号: {order_id}')
+                trade_logger.record_trade(ACCOUNT_NAME, 'sell', code, name, qty, price, order_id, source)
                 return True
             log(f'  ⚠️ 卖出失败: {code} {d.get("message","未知")}')
         else:
@@ -194,7 +199,7 @@ def check_and_trade():
                 log(f'  🚨 检测到ETF持仓（个股策略不符）: {h["code"]} {h["name"]} {h["avail"]}股可用')
                 if AUTO_TRADE:
                     log(f'  → 自动清仓ETF: {h["code"]}')
-                    sell(h['code'], h['avail'])
+                    sell(h['code'], h['avail'], h['name'], h['current'])
                     time.sleep(2)
             else:
                 log(f'  ⏸️ ETF {h["code"]} {h["name"]} 持有{h["count"]}股但可用0（T+1冻结，等待明日清仓）')
@@ -224,11 +229,11 @@ def check_and_trade():
         if h['profit_pct'] <= STOP_LOSS * 100:
             log(f'  🚨 触发止损: {h["code"]} {h["profit_pct"]:+.2f}%')
             if AUTO_TRADE and h['avail'] > 0:
-                sell(h['code'], h['avail'])
+                sell(h['code'], h['avail'], h['name'], h['current'])
         elif h['profit_pct'] >= TAKE_PROFIT * 100:
             log(f'  🎉 触发止盈: {h["code"]} {h["profit_pct"]:+.2f}%')
             if AUTO_TRADE and h['avail'] > 0:
-                sell(h['code'], h['avail'])
+                sell(h['code'], h['avail'], h['name'], h['current'])
 
     # 如果没有活跃持仓或未满，寻找买入机会
     if len(active_holdings) < MAX_POSITIONS and avail_balance >= 50000:
@@ -248,7 +253,7 @@ def check_and_trade():
             if buy_qty >= 100:
                 log(f'  💡 建议买入: {best["code"]} {best["name"]} x{buy_qty}')
                 if AUTO_TRADE:
-                    buy(best['code'], buy_qty)
+                    buy(best['code'], buy_qty, best['name'], best['price'])
         else:
             log('  暂无符合条件的个股')
 

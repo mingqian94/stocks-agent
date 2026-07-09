@@ -222,3 +222,4 @@ stocks/
 | 每周换期要手改accounts.py+dashboard.py+文档多处 | ✅ 已修复 | `accounts.py` 拆出 `PERIODS` 表，`ensure_current_period()` 跨周自动结算/开新期 |
 | Dashboard手动买卖按钮（`/api/trade`）引用未定义的`APIURL`/`APIKEY`，点击必报错 | 🔴 未修复 | 已确认是死代码，暂不使用手动下单，靠自动交易脚本 |
 | 东方财富策略选股纪律可能导致某周零买入，被判定弃权（策略风控 vs 参赛规则打架） | 🔴 未解决 | 无自动兜底检查，需人工每周留意`stock_trade.log`有没有买入记录；第15期（7.6-7.10）就是人工手动补的一笔买入 |
+| 交易记录只在各账号自己的原始日志里，`strategy_log.md`没有统一的成交记录 | ✅ 已修复 | 新增`trade_logger.py`，`auto_trade.py`/`stock_auto_trade.py`的`buy()`/`sell()`成交后都会调用，统一写进`strategy_log.md`末尾的记录表，手动交易调用同样的函数也会记 |
