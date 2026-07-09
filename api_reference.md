@@ -247,6 +247,13 @@ nohup python3 stock_auto_trade.py >> stock_trade.log 2>&1 &
 
 ## 📝 更新日志
 
+### 2026-07-09
+- ✅ `accounts.py` 拆成 `ACCOUNTS`/`STRATEGIES`/`PERIODS` 三张表，`ensure_current_period()` 每周自动结算/开新期，不用再手改多处文件
+- ✅ 修复三个自动交易脚本7/2同时崩溃、无重启机制的问题：`log()` 写文件失败改为捕获异常，不再拖垮盯盘进程；已重新拉起
+- ✅ 清理孤儿脚本：`auto_trade_stock.py`、`backtest_v2.py`、`backtest_v3.py`、`backtest_rotation.py`
+- ✅ `dashboard.py` 的 `/api/periods/<game>` 从硬编码历史期数改为读 `accounts.PERIODS`
+- 🔴 发现 `dashboard.py` 的 `/api/trade`（手动买卖）引用未定义的 `APIURL`/`APIKEY`，是死代码，暂不修
+
 ### 2026-06-16
 - ✅ 新增个股动量突破策略
 - ✅ 东方财富账户切换为个股策略

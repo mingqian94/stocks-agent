@@ -629,3 +629,41 @@ _最后更新: 2026.06.15_
 
 **最后更新**: 2026.06.16
 
+---
+
+# 📅 2026.07.09 | 配置重构 + 自动交易脚本崩溃排查
+
+## 背景
+
+例行检查三个账号战绩时发现：东方财富亏损明显、华泰两个账号涨幅看起来不像策略在动态调仓。排查后发现根因——三个自动交易脚本（`auto_trade.py` 两个华泰子进程 + `stock_auto_trade.py`）在 **2026-07-02 14:31:59 同时崩溃**，报的都是同一个错：写自己的日志文件时 `PermissionError: Operation not permitted`。没有任何重启机制，崩溃后一周内三个账号全部是"裸持仓"，没有任何调仓/止损/止盈操作。
+
+## 修复
+
+1. **崩溃止血**：`auto_trade.py`/`stock_auto_trade.py` 的 `log()` 方法给写文件那步加了 `try/except`，写失败只打印警告不再抛出——反正 `log()` 已经先 `print()` 过一遍，nohup 会把这行重定向进 console 日志，决策/动作记录不会丢，只是不再因为一次偶发的文件写入失败拖死整个盯盘循环。
+2. **重新拉起三个进程**：`nohup python3 auto_trade.py` + `nohup python3 stock_auto_trade.py`，验证过日志正常写入。
+
+## 配置重构：账号 / 策略 / 比赛周期拆成三张表
+
+之前 `accounts.py` 的 `ACCOUNTS` 字典把账号身份和"第几期、初始资金多少"混在一起，每次换期（几乎每周）都要手改 `accounts.py` + `dashboard.py` 好几处硬编码 + 几份 md 文档，`dashboard.py` 里因此攒了两处"防止accounts模块缓存"的硬编码补丁，`/api/periods/<game>` 更是把第11-14期的历史数字整段硬编码在代码里。
+
+重构为：
+- `ACCOUNTS`——账号身份，基本不变
+- `STRATEGIES`——策略参数，不变
+- `PERIODS`——每个账号的比赛周期战绩列表，`ensure_current_period()` 在每次拿到实时总资产时检查是否跨周，跨了就自动结算上一期、开下一期
+
+东方财富杯每周一期（周一到周五），已补上第14期收官（87.56万，估算，因为崩溃期间缺7.3一天的真实数据）、开出第15期（7.6-7.10）。
+
+## 顺带清理
+
+- 删除孤儿脚本：`auto_trade_stock.py`（`stock_auto_trade.py` 的旧迭代）、`backtest_v2.py`/`backtest_v3.py`/`backtest_rotation.py`（无引用的历史回测版本）
+- 发现 `dashboard.py` 的 `/api/trade`（页面手动买卖按钮背后的接口）引用了未定义的 `APIURL`/`APIKEY`，是死代码，点击会报错——暂不修，靠自动交易脚本
+
+## 待办
+
+- 三个 nohup 进程是手动起的，退出终端/重启电脑会消失，长期看需要 launchd 或 cron 做"进程不在就拉起来"的守护
+- 7/2 那次 `PermissionError` 的根因没查清楚（很像 macOS TCC 权限瞬时收回），如果复发要留意
+
+---
+
+**最后更新**: 2026.07.09
+
