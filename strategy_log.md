@@ -658,10 +658,18 @@ _最后更新: 2026.06.15_
 - 删除孤儿脚本：`auto_trade_stock.py`（`stock_auto_trade.py` 的旧迭代）、`backtest_v2.py`/`backtest_v3.py`/`backtest_rotation.py`（无引用的历史回测版本）
 - 发现 `dashboard.py` 的 `/api/trade`（页面手动买卖按钮背后的接口）引用了未定义的 `APIURL`/`APIKEY`，是死代码，点击会报错——暂不修，靠自动交易脚本
 
+## 进程守护：试了 launchd，被 TCC 挡住了
+
+给三个进程配了 launchd LaunchAgent（`launchd/com.stocks.*.plist`，`KeepAlive`+`RunAtLoad`），装上之后三个 job 全部 `EX_CONFIG`(78) 疯狂重试。排查发现：**launchd 起的进程访问不了 `~/Documents`**，Python 报的是 `[Errno 1] Operation not permitted`。这就是 7/2 那次崩溃的根因——`~/Documents`/`~/Desktop`/`~/Downloads` 在 macOS 上受 TCC 保护，只有拿到过"文件与文件夹"授权的进程才能访问，而这个授权是跟具体的交互式终端/App绑定的，会莫名其妙失效（7/2那次大概就是失效了），launchd/cron 这类非交互式后台进程天生拿不到这个授权弹窗，永远会被拒。
+
+已把失败的 launchd job 清掉，改回手动 `nohup` 拉起三个进程（验证过日志正常写入）。`launchd/` 目录下的 plist 文件保留在仓库里作为参考，没有真正生效。
+
+**真正解决**需要二选一：① 把仓库搬出 `~/Documents`（不受TCC保护，一次性解决，但要改代码里硬编码的 `/Users/hetao/Documents/stocks` 路径）；② 手动给 python3 解释器在 系统设置→隐私与安全性→完全磁盘访问权限 里授权（不用改代码，但是手动操作且可能再失效）。用户决定：**暂时不解决，继续靠手动 `nohup`**，接受"重启电脑/终端关闭后要记得手动拉起来"的风险。
+
 ## 待办
 
-- 三个 nohup 进程是手动起的，退出终端/重启电脑会消失，长期看需要 launchd 或 cron 做"进程不在就拉起来"的守护
-- 7/2 那次 `PermissionError` 的根因没查清楚（很像 macOS TCC 权限瞬时收回），如果复发要留意
+- 进程守护还是靠手动 `nohup`，重启电脑/终端关闭后需要手动重新拉起三个进程（见上）
+- 如果之后想解决，参考上面两个方向
 
 ---
 
