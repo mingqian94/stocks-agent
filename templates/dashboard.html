@@ -359,31 +359,6 @@
         .positions-table tr:hover {
             background: rgba(0,200,255,0.03);
         }
-        .trade-btn {
-            padding: 5px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            margin: 0 3px;
-            transition: all 0.2s;
-        }
-        .trade-btn.buy {
-            border: 1px solid #ff4757;
-            background: rgba(255,71,87,0.1);
-            color: #ff4757;
-        }
-        .trade-btn.buy:hover {
-            background: rgba(255,71,87,0.2);
-        }
-        .trade-btn.sell {
-            border: 1px solid #2ed573;
-            background: rgba(46,213,115,0.1);
-            color: #2ed573;
-        }
-        .trade-btn.sell:hover {
-            background: rgba(46,213,115,0.2);
-        }
-        
         .side-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -519,71 +494,6 @@
         .log-line.alert { color: #ff4757; }
         .log-line.success { color: #2ed573; }
         .log-line .time { color: rgba(0,200,255,0.4); }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(5px);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal.show { display: flex; }
-        .modal-content {
-            background: linear-gradient(135deg, #0a1525 0%, #0d1f35 100%);
-            border: 1px solid rgba(0,200,255,0.3);
-            border-radius: 16px;
-            padding: 35px;
-            min-width: 380px;
-            box-shadow: 0 0 50px rgba(0,200,255,0.1);
-        }
-        .modal h3 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 20px;
-            margin-bottom: 25px;
-            color: #00d4ff;
-        }
-        .modal-input {
-            width: 100%;
-            padding: 15px;
-            background: rgba(0,200,255,0.05);
-            border: 1px solid rgba(0,200,255,0.2);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 16px;
-            font-family: 'Rajdhani', sans-serif;
-        }
-        .modal-input:focus {
-            outline: none;
-            border-color: #00d4ff;
-            box-shadow: 0 0 15px rgba(0,200,255,0.2);
-        }
-        .modal-btns {
-            display: flex;
-            gap: 15px;
-            margin-top: 25px;
-        }
-        .modal-btns .btn {
-            flex: 1;
-            padding: 15px;
-            text-align: center;
-        }
-        .btn-confirm {
-            background: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
-            border: none;
-            color: #0a0e17;
-            font-weight: 700;
-        }
-        .btn-confirm:hover {
-            box-shadow: 0 0 20px rgba(0,200,255,0.4);
-        }
-        .btn-cancel {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: rgba(255,255,255,0.6);
-        }
     </style>
 </head>
 <body>
@@ -775,7 +685,6 @@
                         <th>累计涨幅</th>
                         <th>累计盈亏</th>
                         <th>占比</th>
-                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="positionsBody">
@@ -837,21 +746,6 @@
         </div>
     </div>
 
-    <!-- 交易弹窗 -->
-    <div class="modal" id="tradeModal">
-        <div class="modal-content">
-            <h3 id="modalTitle">买入</h3>
-            <input type="hidden" id="tradeAction">
-            <input type="hidden" id="tradeCode">
-            <div id="modalStockInfo" style="margin:15px 0;color:rgba(0,200,255,0.7);font-size:14px;"></div>
-            <input type="number" class="modal-input" id="tradeQty" placeholder="输入数量（手）">
-            <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:8px;">1手 = 100股</div>
-            <div class="modal-btns">
-                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
-                <button class="btn btn-confirm" onclick="confirmTrade()">确认委托</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         let currentGame = 'dongfang';
@@ -1245,10 +1139,6 @@
                                 <td class="${profitUp2 ? 'up' : 'down'}">${profitUp2 ? '+' : ''}${profitPct.toFixed(2)}%</td>
                                 <td class="${profitUp ? 'up' : 'down'}">${profitUp ? '+' : ''}${formatNum(pos.profit)}</td>
                                 <td>${pos.pos_pct.toFixed(2)}%</td>
-                                <td>
-                                    ${pos.avail_count > 0 ? `<button class="trade-btn buy" onclick="openTradeModal('buy','${pos.code}','${pos.name}',${pos.avail_count})">买</button>` : ''}
-                                    ${pos.count > 0 ? `<button class="trade-btn sell" onclick="openTradeModal('sell','${pos.code}','${pos.name}',${pos.count})">卖</button>` : ''}
-                                </td>
                             `;
                             tbody.appendChild(row);
                         });
@@ -1375,44 +1265,6 @@
                 }
             } catch (error) {
                 console.error('日志加载失败:', error);
-            }
-        }
-
-        function openTradeModal(action, code, name, maxQty) {
-            document.getElementById('tradeAction').value = action;
-            document.getElementById('tradeCode').value = code;
-            document.getElementById('modalTitle').textContent = action === 'buy' ? '买入委托' : '卖出委托';
-            document.getElementById('modalStockInfo').textContent = `${name} (${code})`;
-            document.getElementById('tradeQty').value = Math.floor(maxQty / 100);
-            document.getElementById('tradeQty').max = Math.floor(maxQty / 100);
-            document.getElementById('tradeModal').classList.add('show');
-        }
-
-        function closeModal() {
-            document.getElementById('tradeModal').classList.remove('show');
-        }
-
-        async function confirmTrade() {
-            const action = document.getElementById('tradeAction').value;
-            const code = document.getElementById('tradeCode').value;
-            const qty = parseInt(document.getElementById('tradeQty').value) * 100;
-            if (!qty || qty <= 0) { alert('请输入有效数量'); return; }
-            try {
-                const response = await fetch('/api/trade', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action, code, quantity: qty})
-                });
-                const data = await response.json();
-                if (data.success) {
-                    alert('委托成功！');
-                    closeModal();
-                    refreshData();
-                } else {
-                    alert('委托失败: ' + data.message);
-                }
-            } catch (error) {
-                alert('请求失败: ' + error);
             }
         }
 

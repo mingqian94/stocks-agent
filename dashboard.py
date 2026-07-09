@@ -709,37 +709,6 @@ def api_periods_game(game):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/api/trade', methods=['POST'])
-def api_trade():
-    from flask import request
-    data = request.json
-    action = data.get('action')
-    code = data.get('code')
-    qty = data.get('quantity')
-    
-    try:
-        if action == 'buy':
-            r = requests.post(f'{APIURL}/trade',
-                headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
-                json={'type': 'buy', 'stockCode': code, 'quantity': qty, 'useMarketPrice': True},
-                timeout=10)
-        elif action == 'sell':
-            r = requests.post(f'{APIURL}/trade',
-                headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
-                json={'type': 'sell', 'stockCode': code, 'quantity': qty, 'useMarketPrice': True},
-                timeout=10)
-        else:
-            return jsonify({'success': False, 'message': '无效操作'})
-        
-        if r.status_code == 200:
-            d = r.json()
-            if str(d.get('code')) == '200':
-                return jsonify({'success': True, 'data': d.get('data', {})})
-            return jsonify({'success': False, 'message': d.get('message', '未知错误')})
-        return jsonify({'success': False, 'message': f'HTTP {r.status_code}'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-
 @app.route('/api/bots/status')
 def api_bots_status():
     """三个自动交易进程是否在跑 + 最后一条日志"""
@@ -798,10 +767,13 @@ def api_nav_history(game):
                 points = [p for p in points
                           if datetime.datetime.strptime(p['time'], '%Y-%m-%d %H:%M:%S') >= cutoff]
 
-        # 降采样，避免几千个点糊在一起
+        # 降采样，避免几千个点糊在一起；强制保留最后一个点，不然图表右端会比实际数据旧
         if len(points) > 200:
             step = len(points) // 200
-            points = points[::step]
+            sampled = points[::step]
+            if sampled[-1] != points[-1]:
+                sampled[-1] = points[-1]
+            points = sampled
 
         return jsonify({'success': True, 'points': points})
     except Exception as e:
