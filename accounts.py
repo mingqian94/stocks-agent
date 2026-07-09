@@ -100,9 +100,9 @@ PERIODS = {
         {'round': '第11期', 'period': '6.08-6.12', 'initial': 1000000, 'final': 1033000, 'profit_pct': 3.30, 'status': 'done'},
         {'round': '第12期', 'period': '6.15-6.18', 'initial': 1033000, 'final': 1073000, 'profit_pct': 3.87, 'status': 'done'},
         {'round': '第13期', 'period': '6.22-6.26', 'initial': 1073000, 'final': 999000, 'profit_pct': -6.90, 'status': 'done'},
-        # final 取自 7.2 14:28 崩溃前最后一次日志快照（自动交易脚本当天崩溃，缺 7.3 一天数据，属估算）
-        {'round': '第14期', 'period': '6.29-7.3', 'initial': 999000, 'final': 875623, 'profit_pct': -12.34, 'status': 'done'},
-        {'round': '第15期', 'period': '7.6-7.10', 'initial': 875623, 'final': None, 'profit_pct': None, 'status': 'active'},
+        # final 取自 7.3 收盘净值0.964（相对最初100万本金），修正了7.2崩溃后用日志快照估算的875623
+        {'round': '第14期', 'period': '6.29-7.3', 'initial': 999000, 'final': 964000, 'profit_pct': -3.50, 'status': 'done'},
+        {'round': '第15期', 'period': '7.6-7.10', 'initial': 964000, 'final': None, 'profit_pct': None, 'status': 'active'},
     ],
     'ht_7493': [
         {'round': '初赛', 'period': '2026.06.11 - 2026.07.20', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
