@@ -750,6 +750,10 @@
                     <div class="profit-item-value up" id="profitBeat">+1.2%</div>
                 </div>
             </div>
+            <div id="navChartWrap" style="margin-top:16px;">
+                <svg id="navChart" width="100%" height="160" style="display:block;"></svg>
+                <div id="navChartEmpty" style="display:none; color:#666; font-size:13px; padding:8px 0;">暂无数据</div>
+            </div>
         </div>
 
         <!-- 持仓表格 -->
@@ -996,8 +1000,56 @@
                 tab.classList.add('active');
                 currentProfitPeriod = tab.dataset.period;
                 updateProfitDisplay();
+                loadNavChart();
             });
         });
+
+        async function loadNavChart() {
+            const svg = document.getElementById('navChart');
+            const empty = document.getElementById('navChartEmpty');
+            try {
+                const response = await fetch(`/api/nav_history/${currentGame}?range=${currentProfitPeriod}`);
+                const data = await response.json();
+                const points = (data.success && data.points) ? data.points : [];
+
+                if (points.length < 2) {
+                    svg.style.display = 'none';
+                    empty.style.display = 'block';
+                    return;
+                }
+                svg.style.display = 'block';
+                empty.style.display = 'none';
+
+                const width = svg.clientWidth || 600;
+                const height = 160;
+                const padX = 8, padY = 16;
+                const values = points.map(p => p.total_assets);
+                const min = Math.min(...values), max = Math.max(...values);
+                const range = (max - min) || 1;
+
+                const x = i => padX + (i / (points.length - 1)) * (width - padX * 2);
+                const y = v => height - padY - ((v - min) / range) * (height - padY * 2);
+
+                const up = values[values.length - 1] >= values[0];
+                const lineColor = up ? '#00ff88' : '#ff4757';
+
+                const linePoints = points.map((p, i) => `${x(i)},${y(p.total_assets)}`).join(' ');
+                const areaPoints = `${x(0)},${height - padY} ${linePoints} ${x(points.length - 1)},${height - padY}`;
+
+                svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+                svg.innerHTML = `
+                    <polyline points="${areaPoints}" fill="${lineColor}22" stroke="none"></polyline>
+                    <polyline points="${linePoints}" fill="none" stroke="${lineColor}" stroke-width="2"></polyline>
+                    <text x="${padX}" y="12" fill="#666" font-size="11">${formatNum(min)}~${formatNum(max)}</text>
+                    <text x="${padX}" y="${height - 4}" fill="#666" font-size="11">${points[0].time.slice(5, 16)}</text>
+                    <text x="${width - padX}" y="${height - 4}" fill="#666" font-size="11" text-anchor="end">${points[points.length - 1].time.slice(5, 16)}</text>
+                `;
+            } catch (error) {
+                console.error('加载净值曲线失败', error);
+                svg.style.display = 'none';
+                empty.style.display = 'block';
+            }
+        }
 
         async function refreshBotStatus() {
             try {
@@ -1166,7 +1218,8 @@
                     
                     // 更新收益分析
                     updateProfitData(data);
-                    
+                    loadNavChart();
+
                     const tbody = document.getElementById('positionsBody');
                     tbody.innerHTML = '';
                     

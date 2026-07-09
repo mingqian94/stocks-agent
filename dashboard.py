@@ -1,5 +1,6 @@
 import json
 import time
+import datetime
 import requests
 import sys
 import os
@@ -758,6 +759,51 @@ def api_bots_action(action):
     try:
         getattr(botctl, action)(name)
         return jsonify({'success': True, 'bots': botctl.get_status()})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+NAV_LOG_MAP = {
+    'dongfang': 'stock_trade.log',
+    'huatai_7493': 'auto_trade_ht_7493.log',
+    'huatai_8268': 'auto_trade_ht_8268.log',
+}
+NAV_LINE_RE = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*总资产[:：]\s*([\d.]+)元')
+
+@app.route('/api/nav_history/<game>')
+def api_nav_history(game):
+    """从交易日志里解析总资产快照，给收益分析的折线图用。range: day/week/month/all"""
+    try:
+        range_key = request.args.get('range', 'all')
+        log_file = NAV_LOG_MAP.get(game)
+        if not log_file:
+            return jsonify({'success': False, 'message': '账户不存在'})
+
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), log_file)
+        points = []
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    m = NAV_LINE_RE.search(line)
+                    if m:
+                        points.append({'time': m.group(1), 'total_assets': float(m.group(2))})
+
+        if range_key != 'all' and points:
+            latest = datetime.datetime.strptime(points[-1]['time'], '%Y-%m-%d %H:%M:%S')
+            cutoff = {
+                'day': latest - datetime.timedelta(hours=24),
+                'week': latest - datetime.timedelta(days=7),
+                'month': latest - datetime.timedelta(days=30),
+            }.get(range_key)
+            if cutoff:
+                points = [p for p in points
+                          if datetime.datetime.strptime(p['time'], '%Y-%m-%d %H:%M:%S') >= cutoff]
+
+        # 降采样，避免几千个点糊在一起
+        if len(points) > 200:
+            step = len(points) // 200
+            points = points[::step]
+
+        return jsonify({'success': True, 'points': points})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
