@@ -1,9 +1,9 @@
-from accounts import list_accounts
+from accounts import get_accounts_for_dashboard
 
-accounts = list_accounts()
+accounts = get_accounts_for_dashboard()
 print('📋 所有账户列表')
 print('=' * 60)
-for aid, info in accounts.items():
+for info in accounts:
     status_icon = {
         'active': '✅',
         'pending': '⏳',
@@ -11,13 +11,14 @@ for aid, info in accounts.items():
     }.get(info['status'], '❓')
     name = info['name']
     competition = info['competition']
+    round_name = info['round']
     period = info['period']
-    strategy = info['strategy']
-    target = info['target_return'] * 100
-    risk = info['risk_level']
+    strategy = info['strategy']['name']
+    target = (info['strategy']['target_return'] or 0) * 100
+    risk = info['strategy']['risk_level']
     status = info['status']
     print(f'{status_icon} {name}')
-    print(f'   比赛: {competition}')
+    print(f'   比赛: {competition} ({round_name})')
     print(f'   周期: {period}')
     print(f'   策略: {strategy}')
     print(f'   目标: {target:.0f}% | 风险: {risk}')

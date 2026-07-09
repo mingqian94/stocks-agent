@@ -629,13 +629,10 @@ def api_periods_game(game):
         if not account:
             return jsonify({'success': False, 'message': '账户不存在'})
 
-        # 从accounts配置生成期数信息
+        # 从accounts配置（PERIODS表）生成期数信息
         round_name = account.get('round', account['competition'])
         period = account.get('period', '')
         initial = account.get('initial', 1000000)
-        # 强制覆盖第14期初始资金（从accounts.py读取，debug时可能未reload）
-        if game == 'dongfang' and round_name == '第14期':
-            initial = 999000
 
         # 获取当前资产
         total_assets = initial

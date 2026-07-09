@@ -1,5 +1,10 @@
 # 账户配置表
 # ⚠️ 账号密码 / API Key 请在 keys_config.py 中配置，不要写在这里
+#
+# 三张表分别管理三个独立维度，互不混装：
+#   ACCOUNTS  —— 账号身份（平台、api_key、绑定的策略），基本不变
+#   STRATEGIES —— 策略定义（选股/止损止盈参数），随策略调优才变
+#   PERIODS   —— 比赛周期战绩（每期起止时间、初始/期末资金），每期比赛都会新增一条
 from keys_config import get_key, is_pending
 
 ACCOUNTS = {
@@ -9,9 +14,6 @@ ACCOUNTS = {
         'short_name': '华泰-7493',
         'platform': '华泰证券',
         'competition': '华泰证券杯',
-        'round': '初赛',
-        'period': '2026.06.11 - 2026.07.20',
-        'initial': 1000000,
         'api_key': get_key('ht_7493'),
         'strategy_id': 'etf_momentum_stable',
         'auto_trade': not is_pending('ht_7493'),
@@ -23,9 +25,6 @@ ACCOUNTS = {
         'short_name': '华泰-8268',
         'platform': '华泰证券',
         'competition': '华泰证券杯',
-        'round': '初赛',
-        'period': '2026.06.11 - 2026.07.20',
-        'initial': 1000000,
         'api_key': get_key('ht_8268'),
         'strategy_id': 'etf_momentum_aggressive',
         'auto_trade': not is_pending('ht_8268'),
@@ -37,9 +36,6 @@ ACCOUNTS = {
         'short_name': '东方财富',
         'platform': '东方财富模拟交易',
         'competition': '东方财富杯',
-        'round': '第14期',
-        'period': '2026.06.29 - 2026.07.03',
-        'initial': 999000,  # 第13期结束时带入（收益率-6.90%）
         'api_key': get_key('dongfang'),
         'strategy_id': 'stock_momentum',
         'auto_trade': not is_pending('dongfang'),
@@ -104,6 +100,24 @@ STRATEGIES = {
     },
 }
 
+# 比赛周期战绩表：每个账号一份按时间排序的列表，最后一条是当前/最新一期。
+# final/profit_pct 为 None 表示该期尚未结束。
+# 换期时只在这里追加一条（或用 add_period），不用再去改 dashboard.py / accounts.py 其它地方。
+PERIODS = {
+    'east_money': [
+        {'round': '第11期', 'period': '6.08-6.12', 'initial': 1000000, 'final': 1033000, 'profit_pct': 3.30, 'status': 'done'},
+        {'round': '第12期', 'period': '6.15-6.18', 'initial': 1033000, 'final': 1073000, 'profit_pct': 3.87, 'status': 'done'},
+        {'round': '第13期', 'period': '6.22-6.26', 'initial': 1073000, 'final': 999000, 'profit_pct': -6.90, 'status': 'done'},
+        {'round': '第14期', 'period': '6.29-7.3', 'initial': 999000, 'final': None, 'profit_pct': None, 'status': 'active'},
+    ],
+    'ht_7493': [
+        {'round': '初赛', 'period': '2026.06.11 - 2026.07.20', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
+    ],
+    'ht_8268': [
+        {'round': '初赛', 'period': '2026.06.11 - 2026.07.20', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
+    ],
+}
+
 CURRENT_ACCOUNT = 'east_money'
 
 def get_current_account():
@@ -118,17 +132,42 @@ def get_strategy(strategy_id):
     """获取指定策略"""
     return STRATEGIES.get(strategy_id)
 
+def get_current_period(account_id):
+    """获取账号当前（最新）一期的周期战绩，没有记录时返回空字典"""
+    periods = PERIODS.get(account_id, [])
+    return periods[-1] if periods else {}
+
+def add_period(account_id, round_name, period_str, initial, final=None, profit_pct=None, status='active'):
+    """比赛换期时调用：追加一条新的周期记录，取代手改 accounts.py 多处字段"""
+    if PERIODS.get(account_id):
+        PERIODS[account_id][-1]['status'] = 'done'
+    PERIODS.setdefault(account_id, []).append({
+        'round': round_name,
+        'period': period_str,
+        'initial': initial,
+        'final': final,
+        'profit_pct': profit_pct,
+        'status': status
+    })
+
 def get_account_with_strategy(account_id):
-    """获取账户及其策略配置"""
+    """获取账户 + 策略 + 当前周期战绩"""
     account = ACCOUNTS.get(account_id)
-    if account:
-        strategy_id = account.get('strategy_id')
-        strategy = STRATEGIES.get(strategy_id, {})
-        return {**account, 'strategy': strategy}
-    return None
+    if not account:
+        return None
+    strategy_id = account.get('strategy_id')
+    strategy = STRATEGIES.get(strategy_id, {})
+    period = get_current_period(account_id)
+    return {
+        **account,
+        'strategy': strategy,
+        'round': period.get('round', ''),
+        'period': period.get('period', ''),
+        'initial': period.get('initial', 1000000),
+    }
 
 def list_accounts():
-    """列出所有账户"""
+    """列出所有账户（原始身份信息，不含周期战绩）"""
     return ACCOUNTS
 
 def list_strategies():
@@ -141,6 +180,7 @@ def get_accounts_for_dashboard():
     for key, acc in ACCOUNTS.items():
         strategy_id = acc.get('strategy_id')
         strategy = STRATEGIES.get(strategy_id, {})
+        period = get_current_period(key)
         result.append({
             'id': acc['id'],
             'key': key,
@@ -148,9 +188,9 @@ def get_accounts_for_dashboard():
             'short_name': acc.get('short_name', acc['name']),
             'platform': acc['platform'],
             'competition': acc['competition'],
-            'round': acc.get('round', ''),
-            'period': acc['period'],
-            'initial': acc.get('initial', 1000000),
+            'round': period.get('round', ''),
+            'period': period.get('period', ''),
+            'initial': period.get('initial', 1000000),
             'auto_trade': acc.get('auto_trade', False),
             'status': acc.get('status', 'active'),
             'strategy': {
