@@ -32,12 +32,16 @@ MAX_INCREASE = 0.12        # 最大涨幅12%
 MIN_AMOUNT = 200000000     # 最小成交额2亿
 
 def log(msg):
-    """写日志"""
+    """写日志：先打印到标准输出（nohup会重定向进console日志，作为兜底记录），
+    再写文件；写文件失败不应该拖垮整个盯盘进程"""
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f'[{now}] {msg}'
     print(line)
-    with open(LOG_FILE, 'a', encoding='utf-8') as f:
-        f.write(line + '\n')
+    try:
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(line + '\n')
+    except OSError as e:
+        print(f'[{now}] ⚠️ 写日志文件失败（进程继续运行）: {e}')
 
 def get_positions():
     """获取持仓"""

@@ -115,9 +115,14 @@ class AutoTrader:
         account_name = self.account.get('name', 'Unknown')
         competition = self.account.get('competition', 'Unknown')
         line = f'[{t}] [{competition}] [{account_name}] {msg}'
+        # 先打印到标准输出（nohup会重定向进console日志，作为兜底记录），
+        # 再写文件；写文件失败不应该拖垮整个盯盘进程
         print(line)
-        with open(self.log_file, 'a', encoding='utf-8') as f:
-            f.write(line + '\n')
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(line + '\n')
+        except OSError as e:
+            print(f'[{t}] ⚠️ 写日志文件失败（进程继续运行）: {e}')
 
     def get_positions(self):
         try:
