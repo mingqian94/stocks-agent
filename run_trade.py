@@ -1,6 +1,6 @@
 import sys
 import time
-sys.path.insert(0, '/Users/hetao/Documents/stocks')
+sys.path.insert(0, '/Users/hetao/stocks_agent')
 from auto_trade import *
 
 print('=== 执行动量轮动调仓操作 ===')

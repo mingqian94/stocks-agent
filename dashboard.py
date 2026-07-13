@@ -9,7 +9,7 @@ import botctl
 from flask import Flask, render_template, jsonify, request
 
 # 添加路径
-sys.path.insert(0, '/Users/hetao/Documents/stocks')
+sys.path.insert(0, '/Users/hetao/stocks_agent')
 
 # 导入账户配置
 from accounts import ACCOUNTS, STRATEGIES, PERIODS, get_accounts_for_dashboard, get_account_with_strategy, ensure_current_period, get_current_period
@@ -510,7 +510,7 @@ def api_strategy(strategy_id):
             return jsonify({'success': False, 'error': str(e)})
     elif strategy_id == 'stock_momentum':
         try:
-            sys.path.insert(0, '/Users/hetao/Documents/stocks')
+            sys.path.insert(0, '/Users/hetao/stocks_agent')
             import stock_auto_trade
             result = stock_auto_trade.run_strategy()
             return jsonify({'success': True, 'strategy': '个股动量突破', 'result': result})
@@ -522,7 +522,7 @@ def api_strategy(strategy_id):
 @app.route('/api/logs')
 def api_logs():
     try:
-        with open('/Users/hetao/Documents/stocks/auto_trade.log', 'r', encoding='utf-8') as f:
+        with open('/Users/hetao/stocks_agent/auto_trade.log', 'r', encoding='utf-8') as f:
             lines = f.readlines()[-100:]
             return jsonify({'success': True, 'logs': lines})
     except:
@@ -580,7 +580,7 @@ def api_stock_strategy_status():
         is_running = bool(result.stdout.strip())
 
         # 读取stock_trade.log最后几行
-        with open('/Users/hetao/Documents/stocks/stock_trade.log', 'r', encoding='utf-8') as f:
+        with open('/Users/hetao/stocks_agent/stock_trade.log', 'r', encoding='utf-8') as f:
             lines = f.readlines()[-30:]
 
         # 解析最新状态

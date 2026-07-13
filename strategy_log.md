@@ -623,7 +623,7 @@ _最后更新: 2026.06.15_
 
 已把失败的 launchd job 清掉，改回手动 `nohup` 拉起三个进程（验证过日志正常写入）。`launchd/` 目录下的 plist 文件保留在仓库里作为参考，没有真正生效。
 
-**真正解决**需要二选一：① 把仓库搬出 `~/Documents`（不受TCC保护，一次性解决，但要改代码里硬编码的 `/Users/hetao/Documents/stocks` 路径）；② 手动给 python3 解释器在 系统设置→隐私与安全性→完全磁盘访问权限 里授权（不用改代码，但是手动操作且可能再失效）。用户决定：**暂时不解决，继续靠手动 `nohup`**，接受"重启电脑/终端关闭后要记得手动拉起来"的风险。
+**真正解决**需要二选一：① 把仓库搬出 `~/Documents`（不受TCC保护，一次性解决，但要改代码里硬编码的 `/Users/hetao/stocks_agent` 路径）；② 手动给 python3 解释器在 系统设置→隐私与安全性→完全磁盘访问权限 里授权（不用改代码，但是手动操作且可能再失效）。用户决定：**暂时不解决，继续靠手动 `nohup`**，接受"重启电脑/终端关闭后要记得手动拉起来"的风险。
 
 ## 待办
 
@@ -736,6 +736,36 @@ _最后更新: 2026.06.15_
 - `accounts.py`的`STRATEGIES`字典同步更新`position_size`字段（顺带发现`stock_momentum`那条其实还停在改参数之前的旧值——止损-7%、1只95%——从来没跟`stock_auto_trade.py`的常量同步过，dashboard一直显示的是过期参数，这次一起修了）
 
 45个测试跑绿（涉及仓位公式的测试用的是显式传参或`sat.MAX_POSITION_SIZE`动态引用，不受这次改动影响）。三个交易进程已重启。
+
+---
+
+## 📅 2026.07.13 | 仓库搬出 ~/Documents，launchd 真的能用了
+
+### 背景
+
+周末电脑重启，三个交易进程（nohup方式）全停了——这是之前就知道、接受了的风险。周一开盘发现东方财富两只持仓周末没人管，跌破新的-5%止损线（-10.58%、-12.55%），一开盘就被止损清仓。用户说"电脑一定会重启的，有别的办法吗"，重新考虑了搬仓库出`~/Documents`这个方案。
+
+### 验证：Terminal.app 有 TCC 授权，launchd 直接调 python3 没有
+
+先用`osascript`让Terminal.app开个新窗口执行命令，能正常写`~/Documents`下的文件——证明问题只是"非交互进程拿不到TCC授权"，交互式终端本身没问题。试过用launchd调`osascript`控制Terminal帮忙执行（想借用Terminal的授权），实测不通——大概率Apple Events自动化控制权限也是TCC管的，一样卡在"非交互进程拿不到首次授权弹窗"这一层。所以决定还是搬仓库。
+
+### 迁移
+
+`/Users/hetao/Documents/stocks` → `/Users/hetao/stocks_agent`（用户指定的位置）。`~/stocks_agent`不在TCC保护名单里（受保护的只有Desktop/Documents/Downloads/Pictures/Movies/Music这几个特殊文件夹）。
+
+- `mv`整个目录，git历史、remote都不受影响（确认过`git log`、`git remote -v`都正常）
+- 全局替换代码里硬编码的`/Users/hetao/Documents/stocks`路径（`accounts.py`没有，主要是`auto_trade.py`/`stock_auto_trade.py`/`dashboard.py`/`multi_trade.py`/`run_trade.py`/`eastmoney_clear_and_switch.py`/`east_money_weekly_strategy.py`几个脚本，还有`launchd/`下的plist文件）
+- `botctl.py`/`trade_logger.py`本来就是动态算路径（`os.path.dirname(os.path.abspath(__file__))`），不用改
+
+### 实测：launchd 真的成功了
+
+三个交易进程的LaunchAgent（`RunAtLoad`+`KeepAlive`）装到`~/Library/LaunchAgents/`并`launchctl bootstrap`——**这次真的跑起来了**，`state = running`，日志正常写入，不再是之前的`EX_CONFIG`死循环。这是第一次在这台机器上验证launchd能管理这三个进程，意味着以后开机、进程崩溃都会自动拉起，不用再手动`nohup`。
+
+**顺带升级了`botctl.py`**：之前的`stop`只是裸`kill`，现在launchd配了`KeepAlive`之后，光kill会在30秒内被自动拉回来——`stop`/`start`/`restart`改成优先走`launchctl bootout`/`bootstrap`/`kickstart -k`，只有在没装launchd的情况下才退回原来的`nohup`方式。三个操作都做了真实验证：`restart`确认PID变了、`stop`确认kill完不会被launchd拉回来、`start`确认能重新拉起。
+
+### 顺带发现（无关的问题）：dashboard 端口被 macOS 自己的服务占了
+
+想把dashboard.py也配成launchd常驻服务，装上之后一直`EX_CONFIG`/退出码1——查了一下不是TCC问题，是**macOS的AirPlay接收（ControlCenter进程）默认占了5000端口**，跟Flask默认端口冲突，这是这台机器这次重启后才出现的巧合（不是这次迁移引入的）。dashboard暂时保持手动`nohup`启动，需要用户决定要不要换个端口（比如5001）来彻底解决，还是接受偶尔手动重启dashboard。
 
 ---
 

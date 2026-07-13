@@ -34,7 +34,7 @@ PLATFORM_CONFIG = {
     }
 }
 
-LOG_DIR = '/Users/hetao/Documents/stocks'
+LOG_DIR = '/Users/hetao/stocks_agent'
 
 ETFS = {
     # === 宽基ETF ===

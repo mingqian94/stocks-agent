@@ -3,12 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.stocks.autotrade.ht8268</string>
+    <string>com.stocks.dashboard</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>/Users/hetao/stocks_agent/auto_trade.py</string>
-        <string>ht_8268</string>
+        <string>/Users/hetao/stocks_agent/dashboard.py</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/hetao/stocks_agent</string>
@@ -19,8 +18,8 @@
     <key>ThrottleInterval</key>
     <integer>30</integer>
     <key>StandardOutPath</key>
-    <string>/Users/hetao/stocks_agent/auto_trade_ht_8268_console.log</string>
+    <string>/Users/hetao/stocks_agent/dashboard_console.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/hetao/stocks_agent/auto_trade_ht_8268_console.log</string>
+    <string>/Users/hetao/stocks_agent/dashboard_console.log</string>
 </dict>
 </plist>

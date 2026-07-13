@@ -8,7 +8,7 @@ def start_trade(account_id):
     env = os.environ.copy()
     env['CURRENT_ACCOUNT'] = account_id
     
-    log_file = f'/Users/hetao/Documents/stocks/auto_trade_{account_id}.log'
+    log_file = f'/Users/hetao/stocks_agent/auto_trade_{account_id}.log'
     
     process = subprocess.Popen(
         ['python3', 'auto_trade.py'],
@@ -16,7 +16,7 @@ def start_trade(account_id):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        cwd='/Users/hetao/Documents/stocks'
+        cwd='/Users/hetao/stocks_agent'
     )
     
     return process, log_file

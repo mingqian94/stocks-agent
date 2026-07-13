@@ -7,11 +7,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>/Users/hetao/Documents/stocks/auto_trade.py</string>
+        <string>/Users/hetao/stocks_agent/auto_trade.py</string>
         <string>ht_7493</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/hetao/Documents/stocks</string>
+    <string>/Users/hetao/stocks_agent</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -19,8 +19,8 @@
     <key>ThrottleInterval</key>
     <integer>30</integer>
     <key>StandardOutPath</key>
-    <string>/Users/hetao/Documents/stocks/auto_trade_ht_7493_console.log</string>
+    <string>/Users/hetao/stocks_agent/auto_trade_ht_7493_console.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/hetao/Documents/stocks/auto_trade_ht_7493_console.log</string>
+    <string>/Users/hetao/stocks_agent/auto_trade_ht_7493_console.log</string>
 </dict>
 </plist>

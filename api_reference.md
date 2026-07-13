@@ -167,7 +167,7 @@ url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&
 ## 📁 项目文件结构
 
 ```
-/Users/hetao/Documents/stocks/
+/Users/hetao/stocks_agent/
 ├── accounts.py              # 账户和策略配置表
 ├── dashboard.py             # Flask监控面板
 ├── templates/
@@ -188,7 +188,7 @@ url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&
 
 ### 启动监控面板
 ```bash
-cd /Users/hetao/Documents/stocks
+cd /Users/hetao/stocks_agent
 python3 dashboard.py
 # 访问 http://localhost:5000/
 ```

@@ -46,7 +46,7 @@ def log(msg):
     t = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f'[{t}] [东方财富杯] 周策略 {msg}'
     print(line)
-    with open('/Users/hetao/Documents/stocks/east_money_weekly.log', 'a', encoding='utf-8') as f:
+    with open('/Users/hetao/stocks_agent/east_money_weekly.log', 'a', encoding='utf-8') as f:
         f.write(line + '\n')
 
 def get_positions():
@@ -257,7 +257,7 @@ def save_period_data():
         'current_period': CURRENT_PERIOD,
         'period_history': PERIOD_HISTORY
     }
-    with open('/Users/hetao/Documents/stocks/period_data.json', 'w', encoding='utf-8') as f:
+    with open('/Users/hetao/stocks_agent/period_data.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     log('✅ 期数数据已保存')
 

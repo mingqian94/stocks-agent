@@ -18,7 +18,7 @@ from keys_config import get_key
 
 APIKEY = get_key('dongfang')
 APIURL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/mockTrading'
-LOG_FILE = '/Users/hetao/Documents/stocks/auto_trade.log'
+LOG_FILE = '/Users/hetao/stocks_agent/auto_trade.log'
 
 def log(msg):
     t = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -134,7 +134,7 @@ def switch_to_stock_strategy():
     log('=== 切换为个股动量突破策略 ===')
     
     # 更新账户配置
-    accounts_file = '/Users/hetao/Documents/stocks/accounts.py'
+    accounts_file = '/Users/hetao/stocks_agent/accounts.py'
     with open(accounts_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
@@ -150,7 +150,7 @@ def switch_to_stock_strategy():
         log('accounts.py 中未找到 etf_momentum 配置')
     
     # 更新competitions.json
-    competitions_file = '/Users/hetao/Documents/stocks/competitions.json'
+    competitions_file = '/Users/hetao/stocks_agent/competitions.json'
     with open(competitions_file, 'r', encoding='utf-8') as f:
         competitions = json.load(f)
     

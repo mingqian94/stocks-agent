@@ -19,7 +19,7 @@ ACCOUNT_NAME = account_info.get('name', 'Unknown') if account_info else 'Unknown
 AUTO_TRADE = account_info.get('auto_trade', False) if account_info else False
 
 APIURL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/mockTrading'
-LOG_FILE = '/Users/hetao/Documents/stocks/stock_trade.log'
+LOG_FILE = '/Users/hetao/stocks_agent/stock_trade.log'
 
 # ========== 策略参数 ==========
 # 2026.07.09 调整：第13/14/15期连续三期负收益，落地第13期复盘时写的建议——
