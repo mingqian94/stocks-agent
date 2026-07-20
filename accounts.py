@@ -81,7 +81,7 @@ STRATEGIES = {
         'desc': '监测A股实时涨跌幅，买入动量排名前列且符合条件（涨幅3%-12%、成交额>2亿）的强势个股',
         'panel': 'stock',
         'stop_loss': -0.05,
-        'take_profit': 0.20,
+        'take_profit': 0.08,
         'min_increase': 0.03,
         'max_increase': 0.12,
         'min_amount': 200000000,
