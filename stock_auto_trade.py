@@ -201,8 +201,9 @@ def check_and_trade():
             code = pos['secCode']
             count = pos['count']
             avail = pos.get('availCount', 0)
-            cost = pos.get('costPrice', 0) / 1000
-            current = pos.get('price', 0) / 1000
+            # costPriceDec/priceDec 各自独立，不总是3，写死/1000会算错（比如priceDec=2时会小10倍）
+            cost = pos.get('costPrice', 0) / (10 ** pos.get('costPriceDec', 3))
+            current = pos.get('price', 0) / (10 ** pos.get('priceDec', 3))
             profit_pct = pos.get('profitPct', 0)
             holdings.append({
                 'code': code,
@@ -243,8 +244,8 @@ def check_and_trade():
                         'name': pos.get('secName', ''),
                         'count': pos['count'],
                         'avail': pos.get('availCount', 0),
-                        'cost': pos.get('costPrice', 0) / 1000,
-                        'current': pos.get('price', 0) / 1000,
+                        'cost': pos.get('costPrice', 0) / (10 ** pos.get('costPriceDec', 3)),
+                        'current': pos.get('price', 0) / (10 ** pos.get('priceDec', 3)),
                         'profit_pct': pos.get('profitPct', 0)
                     })
 
