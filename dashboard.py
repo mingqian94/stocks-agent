@@ -108,7 +108,7 @@ def get_ht_positions(acount_id):
                         'count': int(p.get('quantity', 0)),
                         'avail_count': int(p.get('quantity', 0)),
                         'price': p.get('currentPrice', 0),
-                        'cost_price': p.get('avgCostPrice', p.get('currentPrice', 0)),
+                        'cost_price': p.get('costPrice', p.get('currentPrice', 0)),
                         'day_pct': day_pct,
                         'day_profit': day_profit,
                         'profit': p.get('profit', 0),
