@@ -97,6 +97,11 @@ def get_ht_positions(acount_id):
             positions = []
             if r2.status_code == 200 and r2.json().get('ok'):
                 for p in r2.json().get('data', {}).get('positions', []):
+                    # 华泰getPositions接口不提供当日涨跌率字段，用当日盈亏/期初市值(市值-当日盈亏)近似算
+                    day_profit = p.get('dayProfit', 0)
+                    market_value = p.get('marketValue', 0)
+                    day_open_value = market_value - day_profit
+                    day_pct = (day_profit / day_open_value) * 100 if day_open_value else 0
                     positions.append({
                         'code': p.get('stockCode', ''),
                         'name': p.get('stockName', ''),
@@ -104,16 +109,22 @@ def get_ht_positions(acount_id):
                         'avail_count': int(p.get('quantity', 0)),
                         'price': p.get('currentPrice', 0),
                         'cost_price': p.get('avgCostPrice', p.get('currentPrice', 0)),
-                        'day_pct': p.get('dayProfitPct', 0) * 100 if p.get('dayProfitPct') else 0,
-                        'day_profit': p.get('dayProfit', 0),
+                        'day_pct': day_pct,
+                        'day_profit': day_profit,
                         'profit': p.get('profit', 0),
                         'pos_pct': (p.get('currentPrice', 0) * p.get('quantity', 0) / balance.get('totalPositionValue', 1)) * 100 if balance.get('totalPositionValue', 0) > 0 else 0
                     })
+            # 华泰getAccountBalance接口的dayProfitPct/totalProfitPct字段本身有bug
+            # （分母initialCapital实际返回的是可用资金而非真实初始本金），弃用上游字段，自己用总资产算
+            total_assets = balance.get('totalAssets', 0)
+            day_profit = balance.get('dayProfit', 0)
+            day_open_assets = total_assets - day_profit
+            day_profit_pct = (day_profit / day_open_assets) * 100 if day_open_assets else 0
             return {
-                'total_assets': balance.get('totalAssets', 0),
+                'total_assets': total_assets,
                 'avail_balance': balance.get('availableBalance', 0),
-                'day_profit': balance.get('dayProfit', 0),
-                'day_profit_pct': balance.get('dayProfitPct', 0) * 100 if balance.get('dayProfitPct') else 0,
+                'day_profit': day_profit,
+                'day_profit_pct': day_profit_pct,
                 'positions': positions
             }
     except:
