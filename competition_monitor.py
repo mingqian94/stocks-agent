@@ -54,7 +54,7 @@ COMPETITIONS = {
         "api_supported": True,
         "ai_mode": "自动交易",
         "priority": 1,
-        "notes": "已报名，当前总资产约103.5万"
+        "notes": "已报名"
     },
     "huatai": {
         "name": "华泰柏瑞杯ETF AI交易巅峰赛",
@@ -210,7 +210,7 @@ def get_upcoming_competitions():
 
 def generate_markdown():
     """生成比赛汇总Markdown文档"""
-    md_file = BASE_DIR / "competitions_summary.md"
+    md_file = BASE_DIR / "competitions_summary.local.md"  # 含真实收益数据，不提交（见.gitignore）
     
     lines = []
     lines.append("# 📊 AI量化炒股 - 模拟盘比赛汇总")

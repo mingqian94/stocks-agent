@@ -7,7 +7,7 @@ import json
 import subprocess
 from datetime import datetime
 
-LOG_FILE = os.path.join(os.path.dirname(__file__), "strategy_log.md")
+LOG_FILE = os.path.join(os.path.dirname(__file__), "strategy_log.local.md")
 
 def query_dfcf_balance():
     """查询东方财富账户"""

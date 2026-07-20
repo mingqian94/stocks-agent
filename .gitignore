@@ -3,3 +3,9 @@
 __pycache__/
 .DS_Store
 keys_config.py
+
+# 真实账户资金/收益数据，只留本地，git里只有脱敏的示例版本
+periods_local.py
+strategy_log.local.md
+ht_trading_plan.local.md
+competitions_summary.local.md

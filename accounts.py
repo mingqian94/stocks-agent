@@ -96,26 +96,22 @@ STRATEGIES = {
 # 比赛周期战绩表：每个账号一份按时间排序的列表，最后一条是当前/最新一期。
 # final/profit_pct 为 None 表示该期尚未结束。
 # 换期时只在这里追加一条（或用 add_period），不用再去改 dashboard.py / accounts.py 其它地方。
-PERIODS = {
-    'east_money': [
-        {'round': '第11期', 'period': '6.08-6.12', 'initial': 1000000, 'final': 1033000, 'profit_pct': 3.30, 'status': 'done'},
-        {'round': '第12期', 'period': '6.15-6.18', 'initial': 1033000, 'final': 1073000, 'profit_pct': 3.87, 'status': 'done'},
-        {'round': '第13期', 'period': '6.22-6.26', 'initial': 1073000, 'final': 999000, 'profit_pct': -6.90, 'status': 'done'},
-        # final 取自 7.3 收盘净值0.964（相对最初100万本金），修正了7.2崩溃后用日志快照估算的875623
-        {'round': '第14期', 'period': '6.29-7.3', 'initial': 999000, 'final': 964000, 'profit_pct': -3.50, 'status': 'done'},
-        # final 取自 7.10 收盘净值0.863（相对最初100万本金）
-        {'round': '第15期', 'period': '7.6-7.10', 'initial': 964000, 'final': 863000, 'profit_pct': -10.48, 'status': 'done'},
-        # final 取自 7.17 收盘净值0.789（相对最初100万本金）
-        {'round': '第16期', 'period': '7.13-7.17', 'initial': 863000, 'final': 789000, 'profit_pct': -8.57, 'status': 'done'},
-        {'round': '第17期', 'period': '7.20-7.24', 'initial': 789000, 'final': None, 'profit_pct': None, 'status': 'active'},
-    ],
-    'ht_7493': [
-        {'round': '初赛', 'period': '2026.06.11 - 2026.07.20', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
-    ],
-    'ht_8268': [
-        {'round': '初赛', 'period': '2026.06.11 - 2026.07.20', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
-    ],
-}
+# 真实的 PERIODS 数据放在 periods_local.py（已加入 .gitignore，不会被提交），
+# git 仓库里只有下面这份脱敏示例——参考 periods_local.example.py 建一份自己的 periods_local.py。
+try:
+    from periods_local import PERIODS
+except ImportError:
+    PERIODS = {
+        'east_money': [
+            {'round': '第1期', 'period': 'MM.DD-MM.DD', 'initial': 1000000, 'final': 1000000, 'profit_pct': 0.00, 'status': 'active'},
+        ],
+        'ht_7493': [
+            {'round': '初赛', 'period': 'YYYY.MM.DD - YYYY.MM.DD', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
+        ],
+        'ht_8268': [
+            {'round': '初赛', 'period': 'YYYY.MM.DD - YYYY.MM.DD', 'initial': 1000000, 'final': None, 'profit_pct': None, 'status': 'active'},
+        ],
+    }
 
 CURRENT_ACCOUNT = 'east_money'
 

@@ -14,7 +14,7 @@
     "api_supported": true,
     "ai_mode": "自动交易",
     "priority": 0,
-    "notes": "已归档，总收益率约+3.7%，跑赢基准沪深300ETF"
+    "notes": "已归档"
   },
   "huatai": {
     "name": "华泰柏瑞杯ETF AI交易巅峰赛",
@@ -30,7 +30,7 @@
     "api_supported": true,
     "ai_mode": "AI Agent自动",
     "priority": 1,
-    "notes": "国内首个面向AI智能体的ETF模拟交易赛事，当前总资产约105.4万，收益率约+5.4%"
+    "notes": "国内首个面向AI智能体的ETF模拟交易赛事"
   },
   "renji": {
     "name": "人机交易模拟大赛",

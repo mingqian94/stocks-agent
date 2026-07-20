@@ -5,7 +5,7 @@
 import os
 from datetime import datetime
 
-LOG_FILE = os.path.join(os.path.dirname(__file__), "strategy_log.md")
+LOG_FILE = os.path.join(os.path.dirname(__file__), "strategy_log.local.md")
 
 
 def log_trade(platform, direction, code, name, quantity, price=None, order_type="market", status="pending", order_id=""):

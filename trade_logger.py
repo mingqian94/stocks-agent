@@ -8,7 +8,7 @@ import os
 import fcntl
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
-STRATEGY_LOG = os.path.join(_DIR, 'strategy_log.md')
+STRATEGY_LOG = os.path.join(_DIR, 'strategy_log.local.md')
 
 _SECTION_HEADER = '## 📒 全部买卖记录（自动追加，手动/自动交易成交后都会写这里，最新在最上面）'
 _TABLE_HEAD = '| 时间 | 账户 | 操作 | 标的 | 数量 | 价格 | 来源 | 委托号 |'
