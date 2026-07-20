@@ -262,3 +262,4 @@ stocks/
 | 稳健/激进两个华泰账户代码里实际共用同一套风控（`STOP_LOSS_DAY_PCT`/`MOMENTUM_TOP_N`模块常量），`STRATEGIES`字典配的参数从未被读取 | ✅ 已修复 | `AutoTrader.__init__`改成从`self.strategy`读取，8268真正Top2/-5%止损；新增8%收益地板保护 |
 | `accounts.py`的`STRATEGIES['stock_momentum']`还是止损-7%/单只95%/1只的旧值，跟`stock_auto_trade.py`实际用的常量不一致，dashboard显示的策略参数是过期的 | ✅ 已修复 | 同步成-5%/2只/每只50%，跟代码常量对齐 |
 | 三个策略的仓位公式都留了10%现金缓冲（`*0.9`），但没有补仓/加仓策略，不需要预留资金摊低成本 | ✅ 已修复 | 改成满仓：`stock_auto_trade.py`单只仓位0.45→0.5，`auto_trade.py`的`*0.9`去掉；`STRATEGIES`字典的`position_size`同步更新 |
+| 华泰两个账户的卖出（止损/减仓/收益地板保护）从7月初起一直失败，风控形同虚设，`~/stocks_agent`两个账户裸持仓到初赛结束（7.20复盘时发现） | ✅ 已修复 | 根因：华泰`getPositions`返回的`quantity`/`availableQuantity`是float（如`199100.0`），直接透传进`submitOrder`请求体，服务端Java按整数解析`NumberFormatException`拒收(500)；买入之所以一直没事是因为买入数量是本地算出来的int。修复：持仓归一化时转`int`，`submitOrder`里也强制`int(qty)`做双保险；顺带把失败时的完整响应体记进日志方便下次排查。修复当天验证：8268重启后成功清仓3只（此前0次成功卖出记录） |

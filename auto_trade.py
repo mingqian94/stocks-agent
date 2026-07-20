@@ -157,8 +157,10 @@ class AutoTrader:
                             std_positions.append({
                                 'secCode': p.get('stockCode', ''),
                                 'secName': p.get('stockName', ''),
-                                'count': p.get('quantity', 0),
-                                'availCount': p.get('availableQuantity', 0),
+                                # 华泰接口返回的是float（如199100.0），submitOrder的quantity按整数解析，
+                                # 传"199100.0"会被Java端NumberFormatException拒收(500)，这里转成int
+                                'count': int(p.get('quantity', 0)),
+                                'availCount': int(p.get('availableQuantity', 0)),
                                 'costPrice': p.get('costPrice', 0),
                                 'price': p.get('currentPrice', 0),
                                 'dayProfit': p.get('dayProfit', 0),
@@ -262,7 +264,7 @@ class AutoTrader:
                 exchange = 'SH' if code.startswith('5') or code.startswith('6') else 'SZ'
                 r = requests.post(f'{self.api_url}/submitOrder',
                     headers=self.get_headers(),
-                    json={'direction': 'buy', 'stockCode': code, 'quantity': qty, 'exchange': exchange, 'price': price}, timeout=10)
+                    json={'direction': 'buy', 'stockCode': code, 'quantity': int(qty), 'exchange': exchange, 'price': price}, timeout=10)
 
             if r.status_code == 200:
                 d = r.json()
@@ -280,9 +282,9 @@ class AutoTrader:
                         trade_logger.record_trade(self.account.get('name', ''), 'buy', code, ETFS.get(code, ''), qty, price, order_id)
                         return True
                     err = d.get('error', {})
-                    self.log(f'  ⚠️ 买入失败: {code} {err.get("message", str(err))}')
+                    self.log(f'  ⚠️ 买入失败: {code} {err.get("message", str(err)) or d}')
             else:
-                self.log(f'  ⚠️ 买入请求失败({r.status_code}): {code}')
+                self.log(f'  ⚠️ 买入请求失败({r.status_code}): {code} | {r.text[:500]}')
         except Exception as e:
             self.log(f'  ⚠️ 买入异常 {code}: {e}')
         return False
@@ -304,7 +306,7 @@ class AutoTrader:
                 exchange = 'SH' if code.startswith('5') or code.startswith('6') else 'SZ'
                 r = requests.post(f'{self.api_url}/submitOrder',
                     headers=self.get_headers(),
-                    json={'direction': 'sell', 'stockCode': code, 'quantity': qty, 'exchange': exchange, 'price': price}, timeout=10)
+                    json={'direction': 'sell', 'stockCode': code, 'quantity': int(qty), 'exchange': exchange, 'price': price}, timeout=10)
 
             if r.status_code == 200:
                 d = r.json()
@@ -322,9 +324,9 @@ class AutoTrader:
                         trade_logger.record_trade(self.account.get('name', ''), 'sell', code, ETFS.get(code, ''), qty, price, order_id)
                         return True
                     err = d.get('error', {})
-                    self.log(f'  ⚠️ 卖出失败: {code} {err.get("message", str(err))}')
+                    self.log(f'  ⚠️ 卖出失败: {code} {err.get("message", str(err)) or d}')
             else:
-                self.log(f'  ⚠️ 卖出请求失败({r.status_code}): {code}')
+                self.log(f'  ⚠️ 卖出请求失败({r.status_code}): {code} | {r.text[:500]}')
         except Exception as e:
             self.log(f'  ⚠️ 卖出异常 {code}: {e}')
         return False
