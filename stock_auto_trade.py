@@ -85,6 +85,34 @@ def get_positions():
         log(f'  ⚠️ 获取持仓异常: {e}')
     return None
 
+def get_stock_candidates_sina_fallback(max_pages=10):
+    """备用选股源：新浪涨跌幅排行榜。东方财富clist接口挂了时兜底用，
+    两个源互相独立，比对同一个接口重试更抗单点故障。"""
+    candidates = []
+    try:
+        for page in range(1, max_pages + 1):
+            url = ('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/'
+                   f'Market_Center.getHQNodeData?page={page}&num=80&sort=changepercent&asc=0&node=hs_a&symbol=&_s_r_a=page')
+            r = requests.get(url, timeout=10, headers={'Referer': 'https://finance.sina.com.cn'})
+            if r.status_code != 200 or not r.text.strip():
+                break
+            items = r.json()
+            if not items:
+                break
+            for item in items:
+                code = item.get('code', '')
+                name = item.get('name', '')
+                pct = item.get('changepercent', 0) / 100
+                amount = item.get('amount', 0)
+                price = float(item.get('trade', 0) or 0)
+                if passes_candidate_filter(pct, amount):
+                    candidates.append({'code': code, 'name': name, 'pct': pct, 'amount': amount, 'price': price})
+            if len(items) < 80:
+                break
+    except Exception as e:
+        log(f'  ⚠️ 备用选股源(新浪)也失败: {e}')
+    return candidates
+
 def get_stock_candidates():
     """获取符合条件的个股"""
     url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f6'
@@ -114,7 +142,9 @@ def get_stock_candidates():
         except Exception as e:
             log(f'  ⚠️ 选股请求失败(第{attempt+1}次): {e}')
             time.sleep(1)
-    return []
+
+    log('  ⚠️ 东方财富选股接口重试3次仍失败，切换备用源(新浪)')
+    return get_stock_candidates_sina_fallback()
 
 def get_quote(code):
     """获取个股行情"""
