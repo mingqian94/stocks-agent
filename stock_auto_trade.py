@@ -33,14 +33,40 @@ STOP_LOSS = -0.05          # 止损5%（原-7%，收紧）
 TAKE_PROFIT = 0.08         # 止盈8%（原20%，几乎打不到）
 
 # 选股条件
+# 2026.07.21 调整：拿CSI300+CSI500成分股(489只)、6.02-7.21历史数据回测过当前3%-12%/止盈8%规则，
+# 平均单笔-0.84%，胜率45%。单独收紧涨幅带(3%-8%)或单独加"昨日也需上涨"确认，效果都更差；
+# 但两个一起加，18笔交易胜率50%、平均单笔+2.67%——组合起来才是"正在建立中、还没走完的强势"，
+# 单独一个只是换了个方式追高。所以两个改动一起上，不单独只上一个。
 MIN_INCREASE = 0.03        # 最小涨幅3%
-MAX_INCREASE = 0.12        # 最大涨幅12%
+MAX_INCREASE = 0.08        # 最大涨幅8%（原12%，收紧，需配合下面的连续确认一起用才有效）
 MIN_AMOUNT = 200000000     # 最小成交额2亿
+REQUIRE_PREV_DAY_UP = True # 要求前一交易日涨跌幅也是正的，避免追单日情绪性拉升
 
 
 def passes_candidate_filter(pct, amount, min_increase=MIN_INCREASE, max_increase=MAX_INCREASE, min_amount=MIN_AMOUNT):
     """选股条件：涨幅在区间内 + 成交额达标"""
     return min_increase <= pct <= max_increase and amount >= min_amount
+
+
+def passes_prev_day_confirm(code):
+    """前一交易日涨跌幅是否也为正（回测验证过，要跟收紧的涨幅带一起用才有效果）。
+    用akshare查（akshare_data.py自带的curl方式这里试过连不上push2his，akshare更稳）。"""
+    import akshare as ak
+    today = datetime.date.today()
+    start = today - datetime.timedelta(days=10)
+    for attempt in range(5):
+        try:
+            df = ak.stock_zh_a_hist(symbol=code, period='daily',
+                                     start_date=start.strftime('%Y%m%d'), end_date=today.strftime('%Y%m%d'),
+                                     adjust='qfq')
+            if df is None or len(df) < 2:
+                return False
+            # 最后一行可能是今天(交易时段内)，前一行才是真正的"昨天"
+            prev_row = df.iloc[-2] if df.iloc[-1]['日期'] == today else df.iloc[-1]
+            return prev_row['涨跌幅'] > 0
+        except Exception:
+            time.sleep(2)
+    return False
 
 
 def should_stop_loss(profit_pct, stop_loss=STOP_LOSS):
@@ -307,7 +333,19 @@ def check_and_trade():
                 log(f'    {c["code"]} {c["name"]} +{c["pct"]*100:.2f}% 成交额{c["amount"]/100000000:.1f}亿')
 
             held_codes = {h['code'] for h in active_holdings}
-            new_picks = [c for c in candidates if c['code'] not in held_codes][:open_slots]
+            unheld = [c for c in candidates if c['code'] not in held_codes]
+
+            new_picks = []
+            if REQUIRE_PREV_DAY_UP:
+                for c in unheld:
+                    if len(new_picks) >= open_slots:
+                        break
+                    if passes_prev_day_confirm(c['code']):
+                        new_picks.append(c)
+                    else:
+                        log(f'    ⏭️ {c["code"]} {c["name"]} 前一交易日未上涨，跳过（避免追单日拉升）')
+            else:
+                new_picks = unheld[:open_slots]
 
             # 每只按 MAX_POSITION_SIZE 用同一份可用资金算仓位（不是买完一只再扣减），
             # 这样MAX_POSITIONS只加起来正好是 MAX_POSITIONS * MAX_POSITION_SIZE 的总仓位
@@ -329,7 +367,8 @@ def main():
     log(f'🚀 个股动量策略启动')
     log(f'  账户: {ACCOUNT_NAME}')
     log(f'  自动交易: {"是" if AUTO_TRADE else "否"}')
-    log(f'  策略参数: 涨幅{MIN_INCREASE*100:.0f}%-{MAX_INCREASE*100:.0f}% 成交额>{MIN_AMOUNT/100000000:.0f}亿')
+    log(f'  策略参数: 涨幅{MIN_INCREASE*100:.0f}%-{MAX_INCREASE*100:.0f}% 成交额>{MIN_AMOUNT/100000000:.0f}亿 '
+        f'{"+ 前日需上涨" if REQUIRE_PREV_DAY_UP else ""}')
     log(f'  止损{STOP_LOSS*100:.0f}% 止盈{TAKE_PROFIT*100:.0f}%')
     log('='*60)
 
