@@ -49,8 +49,7 @@ def passes_candidate_filter(pct, amount, min_increase=MIN_INCREASE, max_increase
 
 
 def passes_prev_day_confirm(code):
-    """前一交易日涨跌幅是否也为正（回测验证过，要跟收紧的涨幅带一起用才有效果）。
-    用akshare查（akshare_data.py自带的curl方式这里试过连不上push2his，akshare更稳）。"""
+    """前一交易日涨跌幅是否也为正（回测验证过，要跟收紧的涨幅带一起用才有效果）。"""
     import akshare as ak
     today = datetime.date.today()
     start = today - datetime.timedelta(days=10)
@@ -171,23 +170,6 @@ def get_stock_candidates():
 
     log('  ⚠️ 东方财富选股接口重试3次仍失败，切换备用源(新浪)')
     return get_stock_candidates_sina_fallback()
-
-def get_quote(code):
-    """获取个股行情"""
-    try:
-        # 判断市场代码
-        market = '1' if code.startswith(('6', '5')) else '0'
-        url = f'https://push2.eastmoney.com/api/qt/stock/get?secid={market}.{code}&fields=f43,f60,f170'
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            d = r.json().get('data', {})
-            if d and d.get('f43'):
-                current = d['f43'] / 1000
-                pct = d.get('f170', 0) / 100
-                return {'code': code, 'price': current, 'pct': pct}
-    except:
-        pass
-    return None
 
 def buy(code, qty, name='', price=None, source='自动'):
     """买入"""
