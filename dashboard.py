@@ -12,7 +12,7 @@ from flask import Flask, render_template, jsonify, request
 sys.path.insert(0, '/Users/hetao/stocks_agent')
 
 # 导入账户配置
-from accounts import ACCOUNTS, STRATEGIES, PERIODS, get_accounts_for_dashboard, get_account_with_strategy, ensure_current_period, get_current_period
+from accounts import ACCOUNTS, STRATEGIES, PERIODS, get_accounts_for_dashboard, get_account_with_strategy, ensure_current_period, get_current_period, get_true_initial
 
 app = Flask(__name__)
 
@@ -234,6 +234,9 @@ def api_positions(game):
                 'initial': initial,
                 'profit': total_profit,
                 'profit_pct': profit_pct,
+                # 华泰没有滚动分期，本期收益就是总收益
+                'since_inception_profit': total_profit,
+                'since_inception_profit_pct': profit_pct,
                 'day_profit': ht_data.get('day_profit', 0),
                 'day_profit_pct': ht_data.get('day_profit_pct', 0),
                 'benchmark_day_pct': benchmark_day_pct,
@@ -297,7 +300,13 @@ def api_positions(game):
         # 计算今日收益
         day_profit = sum(p.get('dayProfit', 0) for p in pos.get('posList', [])) / 1000
         day_profit_pct = (day_profit / total_assets) * 100 if total_assets > 0 else 0
-        
+
+        # 总收益：相对最初本金（第一期的initial），跟"本期收益"（相对当前这一期的起点）是两个数字，
+        # 东方财富每周滚动一期，容易把本期收益误当成总收益看
+        true_initial = get_true_initial(account_key)
+        since_inception_profit = total_assets - true_initial
+        since_inception_profit_pct = (since_inception_profit / true_initial) * 100
+
         return jsonify({
             'success': True,
             'config': config,
@@ -307,6 +316,8 @@ def api_positions(game):
             'initial': initial,
             'profit': total_profit,
             'profit_pct': profit_pct,
+            'since_inception_profit': since_inception_profit,
+            'since_inception_profit_pct': since_inception_profit_pct,
             'day_profit': day_profit,
             'day_profit_pct': day_profit_pct,
             'benchmark_day_pct': benchmark_day_pct,

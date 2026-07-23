@@ -132,6 +132,13 @@ def get_current_period(account_id):
     periods = PERIODS.get(account_id, [])
     return periods[-1] if periods else {}
 
+def get_true_initial(account_id, fallback=1000000):
+    """获取账号最初的本金（第一期的initial），用于算"总收益"。
+    东方财富每周滚动一期，PERIODS里最新一期的initial是"本期"起点，不是最初本金，
+    两者容易混淆——历史上就发生过把"本期收益"当成"总收益"看的误解。"""
+    periods = PERIODS.get(account_id, [])
+    return periods[0]['initial'] if periods else fallback
+
 def add_period(account_id, round_name, period_str, initial, final=None, profit_pct=None, status='active'):
     """比赛换期时调用：追加一条新的周期记录，取代手改 accounts.py 多处字段"""
     if PERIODS.get(account_id):

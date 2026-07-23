@@ -256,15 +256,9 @@
         
         .grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 25px;
-        }
-        @media (max-width: 1000px) {
-            .grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 600px) {
-            .grid { grid-template-columns: 1fr; }
         }
         
         .card {
@@ -591,9 +585,14 @@
                 <div class="stat-label">CNY</div>
             </div>
             <div class="card">
-                <h3>📈 Total Profit 累计收益</h3>
+                <h3 id="profitCardTitle">📈 Period Profit 本期收益</h3>
                 <div class="stat-value" id="profit">--</div>
                 <div class="stat-label" id="profitLabel">--</div>
+            </div>
+            <div class="card">
+                <h3>🏁 Since Inception 总收益（相对最初本金）</h3>
+                <div class="stat-value" id="totalProfitSinceInception">--</div>
+                <div class="stat-label" id="totalProfitSinceInceptionLabel">--</div>
             </div>
             <div class="card">
                 <h3>💵 Available 可用资金</h3>
@@ -885,6 +884,7 @@
                 currentGame = btn.dataset.game;
                 updateStrategyPanels();
                 updateHeaderStatus();
+                renderBotStatusTable();
                 refreshData();
             });
         });
@@ -966,6 +966,26 @@
             }
         }
 
+        function renderBotStatusTable() {
+            const body = document.getElementById('botStatusBody');
+            if (!body) return;
+            // 只显示当前选中账户的机器人，不是全部三个——避免"东方财富tab下看到华泰"这种混淆
+            const botKey = GAME_TO_BOT_KEY[currentGame];
+            const bots = lastBotsStatus.filter(b => b.key === botKey);
+            body.innerHTML = bots.map(b => `
+                <tr>
+                    <td>${b.label}</td>
+                    <td style="color:${b.running ? '#00ff88' : '#ff4757'};">${b.running ? '✅ 运行中' : '❌ 未运行'}</td>
+                    <td>${b.pids.join(',') || '-'}</td>
+                    <td style="font-size:12px; color:#999; max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${b.last_log}</td>
+                    <td>
+                        <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','${b.running ? 'stop' : 'start'}')">${b.running ? '停止' : '启动'}</button>
+                        <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','restart')">重启</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
         async function refreshBotStatus() {
             try {
                 const response = await fetch('/api/bots/status');
@@ -973,19 +993,7 @@
                 if (!data.success) return;
                 lastBotsStatus = data.bots;
                 updateHeaderStatus();
-                const body = document.getElementById('botStatusBody');
-                body.innerHTML = data.bots.map(b => `
-                    <tr>
-                        <td>${b.label}</td>
-                        <td style="color:${b.running ? '#00ff88' : '#ff4757'};">${b.running ? '✅ 运行中' : '❌ 未运行'}</td>
-                        <td>${b.pids.join(',') || '-'}</td>
-                        <td style="font-size:12px; color:#999; max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${b.last_log}</td>
-                        <td>
-                            <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','${b.running ? 'stop' : 'start'}')">${b.running ? '停止' : '启动'}</button>
-                            <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','restart')">重启</button>
-                        </td>
-                    </tr>
-                `).join('');
+                renderBotStatusTable();
             } catch (error) {
                 console.error('加载机器人状态失败', error);
             }
@@ -1112,6 +1120,14 @@
                         profitEl.className = 'stat-value neutral';
                         profitLabel.textContent = '--';
 
+                        const sinceEl = document.getElementById('totalProfitSinceInception');
+                        const sinceLabel = document.getElementById('totalProfitSinceInceptionLabel');
+                        if (sinceEl) {
+                            sinceEl.textContent = '--';
+                            sinceEl.className = 'stat-value neutral';
+                            sinceLabel.textContent = '--';
+                        }
+
                         // 显示未开赛提示
                         const tbody = document.getElementById('positionsBody');
                         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#ffb74d;padding:30px;">${data.message}</td></tr>`;
@@ -1135,7 +1151,16 @@
                     profitEl.textContent = (isProfit ? '+' : '') + formatNum(data.profit);
                     profitEl.className = `stat-value ${isProfit ? 'up' : 'down'}`;
                     profitLabel.textContent = (isProfit ? '+' : '') + data.profit_pct.toFixed(2) + '%';
-                    
+
+                    const sinceEl = document.getElementById('totalProfitSinceInception');
+                    const sinceLabel = document.getElementById('totalProfitSinceInceptionLabel');
+                    if (sinceEl && data.since_inception_profit !== undefined) {
+                        const isSinceProfit = data.since_inception_profit >= 0;
+                        sinceEl.textContent = (isSinceProfit ? '+' : '') + formatNum(data.since_inception_profit);
+                        sinceEl.className = `stat-value ${isSinceProfit ? 'up' : 'down'}`;
+                        sinceLabel.textContent = (isSinceProfit ? '+' : '') + data.since_inception_profit_pct.toFixed(2) + '%';
+                    }
+
                     // 更新收益分析
                     updateProfitData(data);
                     loadNavChart();
