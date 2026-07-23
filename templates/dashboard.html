@@ -243,32 +243,32 @@
         
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 16px;
         }
 
         .section-title {
             font-family: 'Orbitron', sans-serif;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
             color: rgba(0,200,255,0.8);
             letter-spacing: 1px;
-            margin: 30px 0 15px;
-            padding-bottom: 8px;
+            margin: 18px 0 10px;
+            padding-bottom: 6px;
             border-bottom: 1px solid rgba(0,200,255,0.15);
         }
         .section-title:first-child { margin-top: 0; }
         .section-divider {
             border-top: 1px solid rgba(0,200,255,0.1);
-            margin: 20px 0;
+            margin: 14px 0;
         }
-        
+
         .card {
             background: linear-gradient(135deg, rgba(0,30,60,0.8) 0%, rgba(0,15,30,0.9) 100%);
             border: 1px solid rgba(0,200,255,0.15);
-            border-radius: 16px;
-            padding: 25px;
+            border-radius: 14px;
+            padding: 16px 20px;
             position: relative;
             overflow: hidden;
         }
@@ -359,8 +359,8 @@
         .side-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 25px;
+            gap: 14px;
+            margin-bottom: 16px;
         }
         @media (max-width: 900px) {
             .side-grid { grid-template-columns: 1fr; }
@@ -581,19 +581,18 @@
             </div>
         </div>
 
-        <!-- 交易机器人状态 -->
-        <div class="card" style="margin-bottom:20px;">
-            <div class="positions-header">
-                <h3>🤖 Bot Status 交易机器人状态</h3>
-                <button class="btn" onclick="refreshBotStatus()">🔄 刷新</button>
-            </div>
-            <div id="botStatusBody" style="display:flex; align-items:center; gap:20px; flex-wrap:wrap; font-size:13px;">
-                <span style="color:#666;">加载中...</span>
-            </div>
-        </div>
-
-        <!-- 策略监控面板（根据账户动态显示） -->
+        <!-- 交易机器人状态 + 策略监控面板：并排放，之前是2列grid但只会显示1个监控面板，白白空一半 -->
         <div class="side-grid" id="strategyPanels">
+            <div class="card" id="botStatusCard">
+                <div class="positions-header">
+                    <h3>🤖 Bot Status 交易机器人状态</h3>
+                    <button class="btn" onclick="refreshBotStatus()">🔄 刷新</button>
+                </div>
+                <div id="botStatusBody" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; font-size:13px;">
+                    <span style="color:#666;">加载中...</span>
+                </div>
+            </div>
+
             <!-- ETF动量排名（默认显示） -->
             <div class="card" id="etfPanel">
                 <h3>🏆 Momentum Ranking 动量排名 <span style="font-size:10px;color:#666;">(当日涨幅)</span></h3>
