@@ -506,7 +506,7 @@
                 <div class="subtitle">智能量化 · 动量轮动 · 风险管控</div>
                 <div class="status-bar">
                     <div class="status-dot"></div>
-                    <span style="color: rgba(0,255,136,0.7);">系统运行中</span>
+                    <span id="systemStatusText" style="color: rgba(0,255,136,0.7);">系统运行中</span>
                     <span class="time-display" id="currentTime"></span>
                     <span class="strategy-signal" id="strategySignal">📊 策略信号: 等待开盘</span>
                 </div>
@@ -884,6 +884,7 @@
                 btn.classList.add('active');
                 currentGame = btn.dataset.game;
                 updateStrategyPanels();
+                updateHeaderStatus();
                 refreshData();
             });
         });
@@ -945,11 +946,33 @@
             }
         }
 
+        const GAME_TO_BOT_KEY = {dongfang: 'east_money', huatai_7493: 'ht_7493', huatai_8268: 'ht_8268'};
+        let lastBotsStatus = [];
+
+        function updateHeaderStatus() {
+            const botKey = GAME_TO_BOT_KEY[currentGame];
+            const bot = lastBotsStatus.find(b => b.key === botKey);
+            const statusEl = document.getElementById('systemStatusText');
+            const autoEl = document.getElementById('infoAutoTrade');
+            if (!bot) return;
+            if (statusEl) {
+                statusEl.textContent = bot.running ? '系统运行中' : '系统已停止';
+                statusEl.style.color = bot.running ? 'rgba(0,255,136,0.7)' : 'rgba(255,71,87,0.7)';
+            }
+            if (autoEl) {
+                autoEl.textContent = bot.running ? '⚡ 自动交易' : '⏹️ 已停止';
+                autoEl.classList.toggle('auto', bot.running);
+                autoEl.classList.toggle('manual', !bot.running);
+            }
+        }
+
         async function refreshBotStatus() {
             try {
                 const response = await fetch('/api/bots/status');
                 const data = await response.json();
                 if (!data.success) return;
+                lastBotsStatus = data.bots;
+                updateHeaderStatus();
                 const body = document.getElementById('botStatusBody');
                 body.innerHTML = data.bots.map(b => `
                     <tr>
