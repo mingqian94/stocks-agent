@@ -450,11 +450,6 @@
             border-color: #00d4ff;
             color: #00d4ff;
         }
-        .profit-summary {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-        }
         .profit-item {
             background: rgba(0,200,255,0.03);
             border: 1px solid rgba(0,200,255,0.1);
@@ -468,12 +463,7 @@
             text-transform: uppercase;
             margin-bottom: 8px;
         }
-        .profit-item-value {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 20px;
-            font-weight: 700;
-        }
-        
+
         .log-container {
             background: rgba(0,0,0,0.3);
             border: 1px solid rgba(0,200,255,0.1);
@@ -658,8 +648,15 @@
 
         <div class="section-title">💰 收益</div>
 
-        <!-- 收益（合并：总览数字 + 时间维度分析 + 历史期数） -->
+        <!-- 收益（合并：筛选tab在最上面，同时控制下面的统计卡片 + 净值曲线 + 历史期数） -->
         <div class="card">
+            <div class="profit-tabs">
+                <button class="profit-tab active" data-period="day">今日</button>
+                <button class="profit-tab" data-period="week">本周</button>
+                <button class="profit-tab" data-period="month">本月</button>
+                <button class="profit-tab" data-period="all">累计</button>
+            </div>
+
             <div class="grid" style="margin-bottom:0;">
                 <div class="profit-item">
                     <div class="profit-item-label">💰 TOTAL ASSETS 总资产</div>
@@ -667,14 +664,9 @@
                     <div class="stat-label">CNY</div>
                 </div>
                 <div class="profit-item">
-                    <div class="profit-item-label" id="profitCardTitle">📈 PERIOD PROFIT 本期收益</div>
+                    <div class="profit-item-label" id="profitCardTitle">📈 PROFIT 收益</div>
                     <div class="stat-value" id="profit">--</div>
                     <div class="stat-label" id="profitLabel">--</div>
-                </div>
-                <div class="profit-item">
-                    <div class="profit-item-label">🏁 SINCE INCEPTION 总收益（相对最初本金）</div>
-                    <div class="stat-value" id="totalProfitSinceInception">--</div>
-                    <div class="stat-label" id="totalProfitSinceInceptionLabel">--</div>
                 </div>
                 <div class="profit-item">
                     <div class="profit-item-label">💵 AVAILABLE 可用资金</div>
@@ -690,28 +682,7 @@
 
             <div class="section-divider"></div>
 
-            <h3 style="margin-bottom:15px;">📊 Profit Analysis 收益分析</h3>
-            <div class="profit-tabs">
-                <button class="profit-tab active" data-period="day">今日</button>
-                <button class="profit-tab" data-period="week">本周</button>
-                <button class="profit-tab" data-period="month">本月</button>
-                <button class="profit-tab" data-period="all">累计</button>
-            </div>
-            <div class="profit-summary">
-                <div class="profit-item">
-                    <div class="profit-item-label">收益金额</div>
-                    <div class="profit-item-value up" id="profitAmount">+2.6万</div>
-                </div>
-                <div class="profit-item">
-                    <div class="profit-item-label">收益率</div>
-                    <div class="profit-item-value up" id="profitRate">+2.54%</div>
-                </div>
-                <div class="profit-item">
-                    <div class="profit-item-label">跑赢基准</div>
-                    <div class="profit-item-value up" id="profitBeat">+1.2%</div>
-                </div>
-            </div>
-            <div id="navChartWrap" style="margin-top:16px;">
+            <div id="navChartWrap">
                 <svg id="navChart" width="100%" height="160" style="display:block;"></svg>
                 <div id="navChartEmpty" style="display:none; color:#666; font-size:13px; padding:8px 0;">暂无数据</div>
             </div>
@@ -1086,55 +1057,21 @@
                         document.getElementById('totalAssets').textContent = '--';
                         document.getElementById('availBalance').textContent = '--';
                         document.getElementById('positionCount').textContent = '--';
-                        
-                        const profitEl = document.getElementById('profit');
-                        const profitLabel = document.getElementById('profitLabel');
-                        profitEl.textContent = '--';
-                        profitEl.className = 'stat-value neutral';
-                        profitLabel.textContent = '--';
-
-                        const sinceEl = document.getElementById('totalProfitSinceInception');
-                        const sinceLabel = document.getElementById('totalProfitSinceInceptionLabel');
-                        if (sinceEl) {
-                            sinceEl.textContent = '--';
-                            sinceEl.className = 'stat-value neutral';
-                            sinceLabel.textContent = '--';
-                        }
+                        updateProfitData(null);
 
                         // 显示未开赛提示
                         const tbody = document.getElementById('positionsBody');
                         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#ffb74d;padding:30px;">${data.message}</td></tr>`;
 
-                        // 隐藏收益分析
-                        document.querySelector('.profit-summary').style.display = 'none';
-
                         return;
                     }
 
                     // 正常状态
-                    document.querySelector('.profit-summary').style.display = 'grid';
-
                     document.getElementById('totalAssets').textContent = formatNum(data.total_assets);
                     document.getElementById('availBalance').textContent = formatNum(data.avail_balance);
                     document.getElementById('positionCount').textContent = data.positions.length;
-                    
-                    const profitEl = document.getElementById('profit');
-                    const profitLabel = document.getElementById('profitLabel');
-                    const isProfit = data.profit >= 0;
-                    profitEl.textContent = (isProfit ? '+' : '') + formatNum(data.profit);
-                    profitEl.className = `stat-value ${isProfit ? 'up' : 'down'}`;
-                    profitLabel.textContent = (isProfit ? '+' : '') + data.profit_pct.toFixed(2) + '%';
 
-                    const sinceEl = document.getElementById('totalProfitSinceInception');
-                    const sinceLabel = document.getElementById('totalProfitSinceInceptionLabel');
-                    if (sinceEl && data.since_inception_profit !== undefined) {
-                        const isSinceProfit = data.since_inception_profit >= 0;
-                        sinceEl.textContent = (isSinceProfit ? '+' : '') + formatNum(data.since_inception_profit);
-                        sinceEl.className = `stat-value ${isSinceProfit ? 'up' : 'down'}`;
-                        sinceLabel.textContent = (isSinceProfit ? '+' : '') + data.since_inception_profit_pct.toFixed(2) + '%';
-                    }
-
-                    // 更新收益分析
+                    // 收益卡片跟着上面的今日/本周/本月/累计筛选走，具体显示由updateProfitData/updateProfitDisplay算
                     updateProfitData(data);
                     loadNavChart();
 
@@ -1173,55 +1110,60 @@
             }
         }
 
+        const PROFIT_TAB_LABELS = { day: '📈 TODAY 今日收益', week: '📈 THIS WEEK 本周收益', month: '📈 THIS MONTH 本月收益', all: '🏁 SINCE INCEPTION 累计收益（相对最初本金）' };
+
         function updateProfitData(data) {
+            if (!data) {
+                window.profitData = { day: null, week: null, month: null, all: null };
+                updateProfitDisplay();
+                return;
+            }
             const dayProfit = data.day_profit || 0;
             const dayRate = data.day_profit_pct || 0;
             const benchmark = data.benchmark_day_pct || 0;
             const dayBeat = dayRate - benchmark;
 
-            const allProfit = data.profit;
-            const allRate = data.profit_pct;
-            const allBeat = allRate - benchmark;
+            // "累计"= since_inception（相对最初本金），不是本期收益——之前这里错用了data.profit，
+            // 跟上面"累计"tab选中时应该看到的数字对不上（本期收益 vs 总收益是两回事）
+            const allProfit = data.since_inception_profit;
+            const allRate = data.since_inception_profit_pct;
 
             // week/month不再用"今日数据×5/×22"推算——那是假的，跟真实这周/这月的走势完全对不上。
             // 真实的week/month数字由loadNavChart()从nav_history的真实历史点位算，这里先占位。
             window.profitData = {
-                day: { amount: dayProfit, rate: dayRate, beat: dayBeat, real: true },
+                day: { amount: dayProfit, rate: dayRate, beat: dayBeat },
                 week: window.profitData ? window.profitData.week : null,
                 month: window.profitData ? window.profitData.month : null,
-                all: { amount: allProfit, rate: allRate, beat: allBeat, real: true }
+                all: { amount: allProfit, rate: allRate, beat: null }
             };
             updateProfitDisplay();
         }
 
         function updateProfitDisplay() {
             const pd = window.profitData && window.profitData[currentProfitPeriod];
-            const amountEl = document.getElementById('profitAmount');
-            const rateEl = document.getElementById('profitRate');
-            const beatEl = document.getElementById('profitBeat');
+            const titleEl = document.getElementById('profitCardTitle');
+            const profitEl = document.getElementById('profit');
+            const profitLabel = document.getElementById('profitLabel');
+
+            if (titleEl) titleEl.textContent = PROFIT_TAB_LABELS[currentProfitPeriod] || '📈 PROFIT 收益';
 
             if (!pd) {
-                amountEl.textContent = '--';
-                amountEl.className = 'profit-item-value';
-                rateEl.textContent = '--';
-                rateEl.className = 'profit-item-value';
-                beatEl.textContent = '--';
-                beatEl.className = 'profit-item-value';
+                profitEl.textContent = '--';
+                profitEl.className = 'stat-value neutral';
+                profitLabel.textContent = '--';
                 return;
             }
 
             const isProfit = pd.amount >= 0;
-            amountEl.textContent = (isProfit ? '+' : '') + formatNum(pd.amount);
-            amountEl.className = `profit-item-value ${isProfit ? 'up' : 'down'}`;
-
-            rateEl.textContent = (isProfit ? '+' : '') + pd.rate.toFixed(2) + '%';
-            rateEl.className = `profit-item-value ${isProfit ? 'up' : 'down'}`;
+            profitEl.textContent = (isProfit ? '+' : '') + formatNum(pd.amount);
+            profitEl.className = `stat-value ${isProfit ? 'up' : 'down'}`;
 
             // 只有"今日"有真实的基准对比数据（benchmark_day_pct）；周/月/累计都没有历史基准数据，不编数字
-            const beatText = pd.beat === undefined || pd.beat === null ? '--' : ((pd.beat >= 0 ? '+' : '') + pd.beat.toFixed(2) + '%');
-            const beatClass = (pd.beat === undefined || pd.beat === null) ? '' : (pd.beat >= 0 ? 'up' : 'down');
-            beatEl.textContent = beatText;
-            beatEl.className = `profit-item-value ${beatClass}`;
+            let label = (isProfit ? '+' : '') + pd.rate.toFixed(2) + '%';
+            if (pd.beat !== undefined && pd.beat !== null) {
+                label += ` · 跑赢基准${pd.beat >= 0 ? '+' : ''}${pd.beat.toFixed(2)}%`;
+            }
+            profitLabel.textContent = label;
         }
 
         async function loadQuotes() {
