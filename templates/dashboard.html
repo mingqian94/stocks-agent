@@ -1095,6 +1095,9 @@
                         autoTradeEl.textContent = '🔔 手动模式';
                         autoTradeEl.className = 'auto-badge manual';
                     }
+                    // data.config.auto_trade只代表"配了API Key"，不代表进程真的在跑，
+                    // 用真实机器人状态覆盖一遍，避免账户已被botctl stop了还显示"自动交易"
+                    updateHeaderStatus();
 
                     // 处理未开赛状态
                     if (data.status && data.status === 'not_started') {
