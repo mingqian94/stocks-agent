@@ -209,24 +209,11 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            cursor: pointer;
-            user-select: none;
         }
         .strategy-header h3 {
             font-size: 16px;
             color: #ff4757;
             font-weight: 600;
-        }
-        .strategy-toggle {
-            font-size: 20px;
-            color: #ff4757;
-            transition: transform 0.3s;
-        }
-        .strategy-card.collapsed .strategy-toggle {
-            transform: rotate(-90deg);
-        }
-        .strategy-card.collapsed .strategy-content {
-            display: none;
         }
         .strategy-content {
             padding: 0 25px 25px;
@@ -567,11 +554,10 @@
     <div class="container">
         <div class="section-title">🎯 策略与监控</div>
 
-        <!-- 策略折叠说明 -->
-        <div class="strategy-card collapsed" id="strategyCard">
-            <div class="strategy-header" onclick="toggleStrategy()">
+        <!-- 策略说明（常驻展开，不折叠） -->
+        <div class="strategy-card" id="strategyCard">
+            <div class="strategy-header">
                 <h3>📡 STRATEGY OVERVIEW 策略说明</h3>
-                <span class="strategy-toggle">▼</span>
             </div>
             <div class="strategy-content">
                 <div class="strategy-list">
@@ -601,20 +587,9 @@
                 <h3>🤖 Bot Status 交易机器人状态</h3>
                 <button class="btn" onclick="refreshBotStatus()">🔄 刷新</button>
             </div>
-            <table class="positions-table" id="botStatusTable">
-                <thead>
-                    <tr>
-                        <th>账号</th>
-                        <th>状态</th>
-                        <th>PID</th>
-                        <th>最后一条日志</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="botStatusBody">
-                    <tr><td colspan="5" style="color:#666;">加载中...</td></tr>
-                </tbody>
-            </table>
+            <div id="botStatusBody" style="display:flex; align-items:center; gap:20px; flex-wrap:wrap; font-size:13px;">
+                <span style="color:#666;">加载中...</span>
+            </div>
         </div>
 
         <!-- 策略监控面板（根据账户动态显示） -->
@@ -773,10 +748,6 @@
         }
         setInterval(updateTime, 1000);
         updateTime();
-
-        function toggleStrategy() {
-            document.getElementById('strategyCard').classList.toggle('collapsed');
-        }
 
         // 账户和策略配置（从API加载）
         let ACCOUNTS = [];
@@ -974,19 +945,18 @@
             const body = document.getElementById('botStatusBody');
             if (!body) return;
             // 只显示当前选中账户的机器人，不是全部三个——避免"东方财富tab下看到华泰"这种混淆
+            // 现在只剩1行，用单行紧凑布局，不用整张表格
             const botKey = GAME_TO_BOT_KEY[currentGame];
             const bots = lastBotsStatus.filter(b => b.key === botKey);
             body.innerHTML = bots.map(b => `
-                <tr>
-                    <td>${b.label}</td>
-                    <td style="color:${b.running ? '#00ff88' : '#ff4757'};">${b.running ? '✅ 运行中' : '❌ 未运行'}</td>
-                    <td>${b.pids.join(',') || '-'}</td>
-                    <td style="font-size:12px; color:#999; max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${b.last_log}</td>
-                    <td>
-                        <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','${b.running ? 'stop' : 'start'}')">${b.running ? '停止' : '启动'}</button>
-                        <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','restart')">重启</button>
-                    </td>
-                </tr>
+                <span><span style="color:rgba(0,200,255,0.5);">账号</span> ${b.label}</span>
+                <span style="color:${b.running ? '#00ff88' : '#ff4757'};">${b.running ? '✅ 运行中' : '❌ 未运行'}</span>
+                <span><span style="color:rgba(0,200,255,0.5);">PID</span> ${b.pids.join(',') || '-'}</span>
+                <span style="flex:1; min-width:0; color:#999; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${b.last_log}</span>
+                <span style="display:flex; gap:8px;">
+                    <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','${b.running ? 'stop' : 'start'}')">${b.running ? '停止' : '启动'}</button>
+                    <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="botAction('${b.key}','restart')">重启</button>
+                </span>
             `).join('');
         }
 
