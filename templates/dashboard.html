@@ -606,36 +606,6 @@
             </div>
         </div>
 
-        <!-- 交易机器人状态 -->
-        <div class="card" style="margin-bottom:20px;">
-            <div class="positions-header">
-                <h3>🤖 Bot Status 交易机器人状态</h3>
-                <button class="btn" onclick="refreshBotStatus()">🔄 刷新</button>
-            </div>
-            <table class="positions-table" id="botStatusTable">
-                <thead>
-                    <tr>
-                        <th>账号</th>
-                        <th>状态</th>
-                        <th>PID</th>
-                        <th>最后一条日志</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="botStatusBody">
-                    <tr><td colspan="5" style="color:#666;">加载中...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- 期数收益统计 -->
-        <div class="card" style="margin-bottom:20px;">
-            <h3>🏆 Round History 期数收益</h3>
-            <div id="periodHistory">
-                <div style="color:#666;">加载中...</div>
-            </div>
-        </div>
-
         <!-- 收益时间维度 -->
         <div class="card" style="margin-bottom:20px;">
             <h3>📊 Profit Analysis 收益分析</h3>
@@ -666,7 +636,7 @@
         </div>
 
         <!-- 持仓表格 -->
-        <div class="card positions-card">
+        <div class="card positions-card" style="margin-bottom:20px;">
             <div class="positions-header">
                 <h3>📋 HOLDINGS 持仓详情</h3>
                 <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
@@ -690,6 +660,36 @@
                     <tr><td colspan="10" style="text-align:center;color:#666;">加载中...</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- 交易机器人状态 -->
+        <div class="card" style="margin-bottom:20px;">
+            <div class="positions-header">
+                <h3>🤖 Bot Status 交易机器人状态</h3>
+                <button class="btn" onclick="refreshBotStatus()">🔄 刷新</button>
+            </div>
+            <table class="positions-table" id="botStatusTable">
+                <thead>
+                    <tr>
+                        <th>账号</th>
+                        <th>状态</th>
+                        <th>PID</th>
+                        <th>最后一条日志</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="botStatusBody">
+                    <tr><td colspan="5" style="color:#666;">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 期数收益统计 -->
+        <div class="card" style="margin-bottom:20px;">
+            <h3>🏆 Round History 期数收益</h3>
+            <div id="periodHistory">
+                <div style="color:#666;">加载中...</div>
+            </div>
         </div>
 
         <!-- 策略监控面板（根据账户动态显示） -->
@@ -719,15 +719,7 @@
                     <div style="font-size:11px;color:rgba(255,255,255,0.4);">最后检查: <span id="stockLastCheck">--</span></div>
                 </div>
 
-                <div style="background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.1);border-radius:8px;padding:12px;margin-bottom:15px;">
-                    <div style="font-size:11px;color:rgba(0,200,255,0.5);margin-bottom:8px;">策略参数</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-                        <div>涨幅: <span style="color:#00d4ff;">3% - 12%</span></div>
-                        <div>成交额: <span style="color:#00d4ff;">> 2亿</span></div>
-                        <div>止损: <span style="color:#ff4757;">-7%</span></div>
-                        <div>止盈: <span style="color:#2ed573;">+20%</span></div>
-                    </div>
-                </div>
+                <!-- 策略参数（涨幅/成交额/止损/止盈）在上面的STRATEGY OVERVIEW里，这里不重复显示 -->
 
                 <div style="font-size:12px;color:rgba(0,200,255,0.6);margin-bottom:10px;">符合条件的个股</div>
                 <div id="stockCandidates" style="max-height:200px;overflow-y:auto;">
@@ -796,9 +788,6 @@
                 etfPanel.style.display = 'none';
                 stockPanel.style.display = 'block';
                 loadStockCandidates();
-
-                // 更新个股策略参数显示
-                updateStockStrategyParams(strategy);
             } else {
                 // ETF策略：显示ETF动量
                 etfPanel.style.display = 'block';
@@ -854,25 +843,6 @@
                     <div class="strategy-item-title">📊 ETF池</div>
                     <div class="strategy-item-desc">覆盖宽基(5)、科技(3)、金融(2)、医药(2)、新能源(3)、消费(2)、周期(2)、军工传媒(3)</div>
                 `;
-            }
-        }
-
-        // 更新个股策略参数显示
-        function updateStockStrategyParams(strategy) {
-            if (!strategy) return;
-
-            const stockPanel = document.getElementById('stockPanel');
-            if (!stockPanel) return;
-
-            const paramsDiv = stockPanel.querySelector('div[style*="grid-template-columns:1fr 1fr"]');
-            if (paramsDiv) {
-                const items = paramsDiv.querySelectorAll('div');
-                if (items.length >= 4) {
-                    items[0].innerHTML = `涨幅: <span style="color:#00d4ff;">${(strategy.min_increase * 100).toFixed(0)}% - ${(strategy.max_increase * 100).toFixed(0)}%</span>`;
-                    items[1].innerHTML = `成交额: <span style="color:#00d4ff;">> ${(strategy.min_amount / 100000000).toFixed(0)}亿</span>`;
-                    items[2].innerHTML = `止损: <span style="color:#ff4757;">${(strategy.stop_loss * 100).toFixed(0)}%</span>`;
-                    items[3].innerHTML = `止盈: <span style="color:#2ed573;">+${(strategy.take_profit * 100).toFixed(0)}%</span>`;
-                }
             }
         }
 
