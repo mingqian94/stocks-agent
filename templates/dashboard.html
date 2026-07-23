@@ -899,6 +899,18 @@
                 const data = await response.json();
                 const points = (data.success && data.points) ? data.points : [];
 
+                // "本周"/"本月"的真实收益金额/收益率，从这段真实历史点位算，不再用day×5/×22瞎推算
+                if (currentProfitPeriod === 'week' || currentProfitPeriod === 'month') {
+                    if (points.length >= 2) {
+                        const first = points[0].total_assets, last = points[points.length - 1].total_assets;
+                        const amount = last - first;
+                        window.profitData[currentProfitPeriod] = { amount, rate: (amount / first) * 100, beat: null };
+                    } else {
+                        window.profitData[currentProfitPeriod] = null;
+                    }
+                    updateProfitDisplay();
+                }
+
                 if (points.length < 2) {
                     svg.style.display = 'none';
                     empty.style.display = 'block';
@@ -1197,46 +1209,48 @@
             const dayRate = data.day_profit_pct || 0;
             const benchmark = data.benchmark_day_pct || 0;
             const dayBeat = dayRate - benchmark;
-            
-            // 模拟周、月数据（基于今日数据推算）
-            const weekProfit = dayProfit * 5;
-            const weekRate = dayRate * 5;
-            const weekBeat = dayBeat * 5;
-            
-            const monthProfit = dayProfit * 22;
-            const monthRate = dayRate * 22;
-            const monthBeat = dayBeat * 22;
-            
+
             const allProfit = data.profit;
             const allRate = data.profit_pct;
             const allBeat = allRate - benchmark;
-            
+
+            // week/month不再用"今日数据×5/×22"推算——那是假的，跟真实这周/这月的走势完全对不上。
+            // 真实的week/month数字由loadNavChart()从nav_history的真实历史点位算，这里先占位。
             window.profitData = {
-                day: { amount: dayProfit, rate: dayRate, beat: dayBeat, benchmark: benchmark },
-                week: { amount: weekProfit, rate: weekRate, beat: weekBeat, benchmark: benchmark * 5 },
-                month: { amount: monthProfit, rate: monthRate, beat: monthBeat, benchmark: benchmark * 22 },
-                all: { amount: allProfit, rate: allRate, beat: allBeat, benchmark: 0 }
+                day: { amount: dayProfit, rate: dayRate, beat: dayBeat, real: true },
+                week: window.profitData ? window.profitData.week : null,
+                month: window.profitData ? window.profitData.month : null,
+                all: { amount: allProfit, rate: allRate, beat: allBeat, real: true }
             };
             updateProfitDisplay();
         }
 
         function updateProfitDisplay() {
-            const pd = window.profitData[currentProfitPeriod];
-            if (!pd) return;
-            
+            const pd = window.profitData && window.profitData[currentProfitPeriod];
             const amountEl = document.getElementById('profitAmount');
             const rateEl = document.getElementById('profitRate');
             const beatEl = document.getElementById('profitBeat');
-            
+
+            if (!pd) {
+                amountEl.textContent = '--';
+                amountEl.className = 'profit-item-value';
+                rateEl.textContent = '--';
+                rateEl.className = 'profit-item-value';
+                beatEl.textContent = '--';
+                beatEl.className = 'profit-item-value';
+                return;
+            }
+
             const isProfit = pd.amount >= 0;
             amountEl.textContent = (isProfit ? '+' : '') + formatNum(pd.amount);
             amountEl.className = `profit-item-value ${isProfit ? 'up' : 'down'}`;
-            
+
             rateEl.textContent = (isProfit ? '+' : '') + pd.rate.toFixed(2) + '%';
             rateEl.className = `profit-item-value ${isProfit ? 'up' : 'down'}`;
-            
-            const beatText = currentProfitPeriod === 'all' ? '--' : ((pd.beat >= 0 ? '+' : '') + pd.beat.toFixed(2) + '%');
-            const beatClass = currentProfitPeriod === 'all' ? '' : (pd.beat >= 0 ? 'up' : 'down');
+
+            // 只有"今日"有真实的基准对比数据（benchmark_day_pct）；周/月/累计都没有历史基准数据，不编数字
+            const beatText = pd.beat === undefined || pd.beat === null ? '--' : ((pd.beat >= 0 ? '+' : '') + pd.beat.toFixed(2) + '%');
+            const beatClass = (pd.beat === undefined || pd.beat === null) ? '' : (pd.beat >= 0 ? 'up' : 'down');
             beatEl.textContent = beatText;
             beatEl.className = `profit-item-value ${beatClass}`;
         }

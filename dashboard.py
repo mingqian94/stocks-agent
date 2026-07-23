@@ -780,10 +780,13 @@ def api_nav_history(game):
 
         if range_key != 'all' and points:
             latest = datetime.datetime.strptime(points[-1]['time'], '%Y-%m-%d %H:%M:%S')
+            latest_date = latest.date()
+            # "本周"/"本月"按自然周期对齐（周一/当月1号），不是"过去7/30天"的滚动窗口——
+            # 之前用latest-7天，本周一从月末的数据都会被算进"本周"，收益跟真实这一周对不上
             cutoff = {
                 'day': latest - datetime.timedelta(hours=24),
-                'week': latest - datetime.timedelta(days=7),
-                'month': latest - datetime.timedelta(days=30),
+                'week': datetime.datetime.combine(latest_date - datetime.timedelta(days=latest_date.weekday()), datetime.time.min),
+                'month': datetime.datetime.combine(latest_date.replace(day=1), datetime.time.min),
             }.get(range_key)
             if cutoff:
                 points = [p for p in points
