@@ -501,16 +501,6 @@
     
     <div class="header">
         <div class="header-top">
-            <div class="title-area">
-                <h1>AI QUANT TRADING</h1>
-                <div class="subtitle">智能量化 · 动量轮动 · 风险管控</div>
-                <div class="status-bar">
-                    <div class="status-dot"></div>
-                    <span id="systemStatusText" style="color: rgba(0,255,136,0.7);">系统运行中</span>
-                    <span class="time-display" id="currentTime"></span>
-                    <span class="strategy-signal" id="strategySignal">📊 策略信号: 等待开盘</span>
-                </div>
-            </div>
             <div class="game-selector" id="gameSelector">
                 <button class="game-btn active" data-game="dongfang">
                     <span class="tab-logo" style="background: linear-gradient(135deg, #ff4757, #ff6b81);">E</span>
@@ -525,6 +515,16 @@
                     华泰-8268
                 </button>
             </div>
+            <div class="title-area" style="text-align: right;">
+                <h1>AI QUANT TRADING</h1>
+                <div class="subtitle">智能量化 · 动量轮动 · 风险管控</div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-dot"></div>
+            <span id="systemStatusText" style="color: rgba(0,255,136,0.7);">系统运行中</span>
+            <span class="time-display" id="currentTime"></span>
+            <span class="strategy-signal" id="strategySignal">📊 策略信号: 等待开盘</span>
         </div>
         <div class="game-info" id="gameInfo">
             <div class="game-info-item">
@@ -1254,11 +1254,18 @@
         }
 
         async function loadSignal() {
+            const el = document.getElementById('strategySignal');
+            const bot = lastBotsStatus.find(b => b.key === GAME_TO_BOT_KEY[currentGame]);
+            if (bot && !bot.running) {
+                // 机器人没在跑，策略信号只是"如果在跑会怎么建议"，跟"已停止"放一起会误导，不显示
+                el.textContent = '⏹️ 机器人已停止，不生成买卖信号';
+                el.className = 'strategy-signal signal-warning';
+                return;
+            }
             try {
                 const response = await fetch(`/api/signal/${currentGame}`);
                 const data = await response.json();
                 if (data.success) {
-                    const el = document.getElementById('strategySignal');
                     const signalIcons = {'success': '✅', 'warning': '⚠️', 'danger': '🚨', 'info': '📊'};
                     el.textContent = `${signalIcons[data.signal_type] || '📊'} ${data.signal}`;
                     el.className = `strategy-signal signal-${data.signal_type}`;
@@ -1373,9 +1380,9 @@
             // 2. 初始化策略面板（根据账户动态显示ETF/个股监控）
             updateStrategyPanels();
 
-            // 3. 加载数据
+            // 3. 加载数据（先查机器人真实运行状态，loadSignal才知道要不要显示信号）
+            await refreshBotStatus();
             refreshData();
-            refreshBotStatus();
 
             // 4. 定时刷新
             setInterval(refreshData, 180000);
