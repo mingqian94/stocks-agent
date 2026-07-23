@@ -247,7 +247,33 @@ class AutoTrader:
         else:
             return f43 / 100.0
 
+    def _get_position_count(self, code):
+        """查某只股票当前持仓数量，查不到持仓数据返回None（跟"持仓0股"区分开）"""
+        pos_data = self.get_positions()
+        if not pos_data:
+            return None
+        for p in pos_data.get('posList', []):
+            if p.get('secCode') == code:
+                return p.get('count', 0)
+        return 0
+
+    def verify_position_change(self, code, baseline_count, qty, direction, retries=4, delay=3):
+        """broker说下单成功了，不代表真的成交了——下单前记一次持仓基线，
+        下单后隔几秒重新查，确认股数真的按预期方向变化，而不是只信下单接口的同步响应。
+        留10%容差应对部分成交/委托数量取整误差。"""
+        for attempt in range(retries):
+            time.sleep(delay)
+            cur = self._get_position_count(code)
+            if cur is None:
+                continue
+            if direction == 'buy' and cur >= baseline_count + qty * 0.9:
+                return True
+            if direction == 'sell' and cur <= baseline_count - qty * 0.9:
+                return True
+        return False
+
     def buy(self, code, qty, price=None):
+        baseline = self._get_position_count(code)
         try:
             if price is None:
                 q = self.get_quote(code)
@@ -268,19 +294,18 @@ class AutoTrader:
 
             if r.status_code == 200:
                 d = r.json()
+                ok = str(d.get('code')) == '200' if self.platform_cfg == PLATFORM_CONFIG['east_money'] else d.get('ok')
+                if ok:
+                    order_id = d.get('data', {}).get('orderID', '?')
+                    if baseline is not None and not self.verify_position_change(code, baseline, qty, 'buy'):
+                        self.log(f'  🚨 二次核实失败: {code} broker说买入成功，但隔几秒重新查持仓股数没有相应增加，可能没真的成交，不记为成功交易')
+                        return False
+                    self.log(f'  ✅ 买入成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}（已核实持仓变化）')
+                    trade_logger.record_trade(self.account.get('name', ''), 'buy', code, ETFS.get(code, ''), qty, price, order_id)
+                    return True
                 if self.platform_cfg == PLATFORM_CONFIG['east_money']:
-                    if str(d.get('code')) == '200':
-                        order_id = d.get('data', {}).get('orderID', '?')
-                        self.log(f'  ✅ 买入成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
-                        trade_logger.record_trade(self.account.get('name', ''), 'buy', code, ETFS.get(code, ''), qty, price, order_id)
-                        return True
                     self.log(f'  ⚠️ 买入失败: {code} {d.get("message", "未知")}')
                 else:
-                    if d.get('ok'):
-                        order_id = d.get('data', {}).get('orderID', '?')
-                        self.log(f'  ✅ 买入成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
-                        trade_logger.record_trade(self.account.get('name', ''), 'buy', code, ETFS.get(code, ''), qty, price, order_id)
-                        return True
                     err = d.get('error', {})
                     self.log(f'  ⚠️ 买入失败: {code} {err.get("message", str(err)) or d}')
             else:
@@ -290,6 +315,7 @@ class AutoTrader:
         return False
 
     def sell(self, code, qty, price=None):
+        baseline = self._get_position_count(code)
         try:
             if price is None:
                 q = self.get_quote(code)
@@ -310,19 +336,18 @@ class AutoTrader:
 
             if r.status_code == 200:
                 d = r.json()
+                ok = str(d.get('code')) == '200' if self.platform_cfg == PLATFORM_CONFIG['east_money'] else d.get('ok')
+                if ok:
+                    order_id = d.get('data', {}).get('orderID', '?')
+                    if baseline is not None and not self.verify_position_change(code, baseline, qty, 'sell'):
+                        self.log(f'  🚨 二次核实失败: {code} broker说卖出成功，但隔几秒重新查持仓股数没有相应减少，可能没真的成交，不记为成功交易')
+                        return False
+                    self.log(f'  ✅ 卖出成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}（已核实持仓变化）')
+                    trade_logger.record_trade(self.account.get('name', ''), 'sell', code, ETFS.get(code, ''), qty, price, order_id)
+                    return True
                 if self.platform_cfg == PLATFORM_CONFIG['east_money']:
-                    if str(d.get('code')) == '200':
-                        order_id = d.get('data', {}).get('orderID', '?')
-                        self.log(f'  ✅ 卖出成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
-                        trade_logger.record_trade(self.account.get('name', ''), 'sell', code, ETFS.get(code, ''), qty, price, order_id)
-                        return True
                     self.log(f'  ⚠️ 卖出失败: {code} {d.get("message", "未知")}')
                 else:
-                    if d.get('ok'):
-                        order_id = d.get('data', {}).get('orderID', '?')
-                        self.log(f'  ✅ 卖出成功: {ETFS.get(code, code)} {code} x{qty} @{price:.3f} 委托号: {order_id}')
-                        trade_logger.record_trade(self.account.get('name', ''), 'sell', code, ETFS.get(code, ''), qty, price, order_id)
-                        return True
                     err = d.get('error', {})
                     self.log(f'  ⚠️ 卖出失败: {code} {err.get("message", str(err)) or d}')
             else:

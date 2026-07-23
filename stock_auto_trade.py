@@ -171,8 +171,34 @@ def get_stock_candidates():
     log('  ⚠️ 东方财富选股接口重试3次仍失败，切换备用源(新浪)')
     return get_stock_candidates_sina_fallback()
 
+def _get_position_count(code):
+    """查某只股票当前持仓数量，查不到持仓数据返回None（跟"持仓0股"区分开）"""
+    pos_data = get_positions()
+    if not pos_data:
+        return None
+    for p in pos_data.get('posList', []):
+        if p.get('secCode') == code:
+            return p.get('count', 0)
+    return 0
+
+def verify_position_change(code, baseline_count, qty, direction, retries=4, delay=3):
+    """broker说下单成功了，不代表真的成交了——下单前记一次持仓基线，
+    下单后隔几秒重新查，确认股数真的按预期方向变化，而不是只信下单接口的同步响应。
+    留10%容差应对部分成交/委托数量取整误差。"""
+    for attempt in range(retries):
+        time.sleep(delay)
+        cur = _get_position_count(code)
+        if cur is None:
+            continue
+        if direction == 'buy' and cur >= baseline_count + qty * 0.9:
+            return True
+        if direction == 'sell' and cur <= baseline_count - qty * 0.9:
+            return True
+    return False
+
 def buy(code, qty, name='', price=None, source='自动'):
     """买入"""
+    baseline = _get_position_count(code)
     try:
         r = requests.post(f'{APIURL}/trade',
             headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
@@ -182,7 +208,10 @@ def buy(code, qty, name='', price=None, source='自动'):
             d = r.json()
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
-                log(f'  ✅ 买入成功: {code} x{qty} 委托号: {order_id}')
+                if baseline is not None and not verify_position_change(code, baseline, qty, 'buy'):
+                    log(f'  🚨 二次核实失败: {code} broker说买入成功，但隔几秒重新查持仓股数没有相应增加，可能没真的成交，不记为成功交易')
+                    return False
+                log(f'  ✅ 买入成功: {code} x{qty} 委托号: {order_id}（已核实持仓变化）')
                 trade_logger.record_trade(ACCOUNT_NAME, 'buy', code, name, qty, price, order_id, source)
                 return True
             log(f'  ⚠️ 买入失败: {code} {d.get("message","未知")}')
@@ -194,6 +223,7 @@ def buy(code, qty, name='', price=None, source='自动'):
 
 def sell(code, qty, name='', price=None, source='自动'):
     """卖出"""
+    baseline = _get_position_count(code)
     try:
         r = requests.post(f'{APIURL}/trade',
             headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
@@ -203,7 +233,10 @@ def sell(code, qty, name='', price=None, source='自动'):
             d = r.json()
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
-                log(f'  ✅ 卖出成功: {code} x{qty} 委托号: {order_id}')
+                if baseline is not None and not verify_position_change(code, baseline, qty, 'sell'):
+                    log(f'  🚨 二次核实失败: {code} broker说卖出成功，但隔几秒重新查持仓股数没有相应减少，可能没真的成交，不记为成功交易')
+                    return False
+                log(f'  ✅ 卖出成功: {code} x{qty} 委托号: {order_id}（已核实持仓变化）')
                 trade_logger.record_trade(ACCOUNT_NAME, 'sell', code, name, qty, price, order_id, source)
                 return True
             log(f'  ⚠️ 卖出失败: {code} {d.get("message","未知")}')
