@@ -260,6 +260,22 @@
             gap: 20px;
             margin-bottom: 25px;
         }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: rgba(0,200,255,0.8);
+            letter-spacing: 1px;
+            margin: 30px 0 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0,200,255,0.15);
+        }
+        .section-title:first-child { margin-top: 0; }
+        .section-divider {
+            border-top: 1px solid rgba(0,200,255,0.1);
+            margin: 20px 0;
+        }
         
         .card {
             background: linear-gradient(135deg, rgba(0,30,60,0.8) 0%, rgba(0,15,30,0.9) 100%);
@@ -549,6 +565,8 @@
     </div>
 
     <div class="container">
+        <div class="section-title">🎯 策略与监控</div>
+
         <!-- 策略折叠说明 -->
         <div class="strategy-card collapsed" id="strategyCard">
             <div class="strategy-header" onclick="toggleStrategy()">
@@ -577,91 +595,6 @@
             </div>
         </div>
 
-        <!-- 统计卡片 -->
-        <div class="grid">
-            <div class="card">
-                <h3>💰 Total Assets 总资产</h3>
-                <div class="stat-value" id="totalAssets">--</div>
-                <div class="stat-label">CNY</div>
-            </div>
-            <div class="card">
-                <h3 id="profitCardTitle">📈 Period Profit 本期收益</h3>
-                <div class="stat-value" id="profit">--</div>
-                <div class="stat-label" id="profitLabel">--</div>
-            </div>
-            <div class="card">
-                <h3>🏁 Since Inception 总收益（相对最初本金）</h3>
-                <div class="stat-value" id="totalProfitSinceInception">--</div>
-                <div class="stat-label" id="totalProfitSinceInceptionLabel">--</div>
-            </div>
-            <div class="card">
-                <h3>💵 Available 可用资金</h3>
-                <div class="stat-value" id="availBalance">--</div>
-                <div class="stat-label">CNY</div>
-            </div>
-            <div class="card">
-                <h3>📦 Positions 持仓数量</h3>
-                <div class="stat-value" id="positionCount">--</div>
-                <div class="stat-label">Stocks</div>
-            </div>
-        </div>
-
-        <!-- 收益时间维度 -->
-        <div class="card" style="margin-bottom:20px;">
-            <h3>📊 Profit Analysis 收益分析</h3>
-            <div class="profit-tabs">
-                <button class="profit-tab active" data-period="day">今日</button>
-                <button class="profit-tab" data-period="week">本周</button>
-                <button class="profit-tab" data-period="month">本月</button>
-                <button class="profit-tab" data-period="all">累计</button>
-            </div>
-            <div class="profit-summary">
-                <div class="profit-item">
-                    <div class="profit-item-label">收益金额</div>
-                    <div class="profit-item-value up" id="profitAmount">+2.6万</div>
-                </div>
-                <div class="profit-item">
-                    <div class="profit-item-label">收益率</div>
-                    <div class="profit-item-value up" id="profitRate">+2.54%</div>
-                </div>
-                <div class="profit-item">
-                    <div class="profit-item-label">跑赢基准</div>
-                    <div class="profit-item-value up" id="profitBeat">+1.2%</div>
-                </div>
-            </div>
-            <div id="navChartWrap" style="margin-top:16px;">
-                <svg id="navChart" width="100%" height="160" style="display:block;"></svg>
-                <div id="navChartEmpty" style="display:none; color:#666; font-size:13px; padding:8px 0;">暂无数据</div>
-            </div>
-        </div>
-
-        <!-- 持仓表格 -->
-        <div class="card positions-card" style="margin-bottom:20px;">
-            <div class="positions-header">
-                <h3>📋 HOLDINGS 持仓详情</h3>
-                <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
-            </div>
-            <table class="positions-table">
-                <thead>
-                    <tr>
-                        <th>标的</th>
-                        <th>代码</th>
-                        <th>持仓</th>
-                        <th>成本价</th>
-                        <th>现价</th>
-                        <th>今日涨幅</th>
-                        <th>今日盈亏</th>
-                        <th>累计涨幅</th>
-                        <th>累计盈亏</th>
-                        <th>占比</th>
-                    </tr>
-                </thead>
-                <tbody id="positionsBody">
-                    <tr><td colspan="10" style="text-align:center;color:#666;">加载中...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
         <!-- 交易机器人状态 -->
         <div class="card" style="margin-bottom:20px;">
             <div class="positions-header">
@@ -682,14 +615,6 @@
                     <tr><td colspan="5" style="color:#666;">加载中...</td></tr>
                 </tbody>
             </table>
-        </div>
-
-        <!-- 期数收益统计 -->
-        <div class="card" style="margin-bottom:20px;">
-            <h3>🏆 Round History 期数收益</h3>
-            <div id="periodHistory">
-                <div style="color:#666;">加载中...</div>
-            </div>
         </div>
 
         <!-- 策略监控面板（根据账户动态显示） -->
@@ -725,6 +650,103 @@
                 <div id="stockCandidates" style="max-height:200px;overflow-y:auto;">
                     <div style="color:#666;font-size:12px;">加载中...</div>
                 </div>
+            </div>
+        </div>
+
+        <div class="section-title">📋 持仓</div>
+
+        <!-- 持仓表格 -->
+        <div class="card positions-card">
+            <div class="positions-header">
+                <h3>📋 HOLDINGS 持仓详情</h3>
+                <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
+            </div>
+            <table class="positions-table">
+                <thead>
+                    <tr>
+                        <th>标的</th>
+                        <th>代码</th>
+                        <th>持仓</th>
+                        <th>成本价</th>
+                        <th>现价</th>
+                        <th>今日涨幅</th>
+                        <th>今日盈亏</th>
+                        <th>累计涨幅</th>
+                        <th>累计盈亏</th>
+                        <th>占比</th>
+                    </tr>
+                </thead>
+                <tbody id="positionsBody">
+                    <tr><td colspan="10" style="text-align:center;color:#666;">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section-title">💰 收益</div>
+
+        <!-- 收益（合并：总览数字 + 时间维度分析 + 历史期数） -->
+        <div class="card">
+            <div class="grid" style="margin-bottom:0;">
+                <div class="profit-item">
+                    <div class="profit-item-label">💰 TOTAL ASSETS 总资产</div>
+                    <div class="stat-value" id="totalAssets">--</div>
+                    <div class="stat-label">CNY</div>
+                </div>
+                <div class="profit-item">
+                    <div class="profit-item-label" id="profitCardTitle">📈 PERIOD PROFIT 本期收益</div>
+                    <div class="stat-value" id="profit">--</div>
+                    <div class="stat-label" id="profitLabel">--</div>
+                </div>
+                <div class="profit-item">
+                    <div class="profit-item-label">🏁 SINCE INCEPTION 总收益（相对最初本金）</div>
+                    <div class="stat-value" id="totalProfitSinceInception">--</div>
+                    <div class="stat-label" id="totalProfitSinceInceptionLabel">--</div>
+                </div>
+                <div class="profit-item">
+                    <div class="profit-item-label">💵 AVAILABLE 可用资金</div>
+                    <div class="stat-value" id="availBalance">--</div>
+                    <div class="stat-label">CNY</div>
+                </div>
+                <div class="profit-item">
+                    <div class="profit-item-label">📦 POSITIONS 持仓数量</div>
+                    <div class="stat-value" id="positionCount">--</div>
+                    <div class="stat-label">Stocks</div>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <h3 style="margin-bottom:15px;">📊 Profit Analysis 收益分析</h3>
+            <div class="profit-tabs">
+                <button class="profit-tab active" data-period="day">今日</button>
+                <button class="profit-tab" data-period="week">本周</button>
+                <button class="profit-tab" data-period="month">本月</button>
+                <button class="profit-tab" data-period="all">累计</button>
+            </div>
+            <div class="profit-summary">
+                <div class="profit-item">
+                    <div class="profit-item-label">收益金额</div>
+                    <div class="profit-item-value up" id="profitAmount">+2.6万</div>
+                </div>
+                <div class="profit-item">
+                    <div class="profit-item-label">收益率</div>
+                    <div class="profit-item-value up" id="profitRate">+2.54%</div>
+                </div>
+                <div class="profit-item">
+                    <div class="profit-item-label">跑赢基准</div>
+                    <div class="profit-item-value up" id="profitBeat">+1.2%</div>
+                </div>
+            </div>
+            <div id="navChartWrap" style="margin-top:16px;">
+                <svg id="navChart" width="100%" height="160" style="display:block;"></svg>
+                <div id="navChartEmpty" style="display:none; color:#666; font-size:13px; padding:8px 0;">暂无数据</div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <h3 style="margin-bottom:15px;">🏆 Round History 期数收益</h3>
+            <div id="periodHistory">
+                <div style="color:#666;">加载中...</div>
             </div>
         </div>
 
