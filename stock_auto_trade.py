@@ -181,10 +181,12 @@ def _get_position_count(code):
             return p.get('count', 0)
     return 0
 
-def verify_position_change(code, baseline_count, qty, direction, retries=4, delay=3):
+def verify_position_change(code, baseline_count, qty, direction, retries=8, delay=5):
     """broker说下单成功了，不代表真的成交了——下单前记一次持仓基线，
     下单后隔几秒重新查，确认股数真的按预期方向变化，而不是只信下单接口的同步响应。
-    留10%容差应对部分成交/委托数量取整误差。"""
+    留10%容差应对部分成交/委托数量取整误差。
+    2026.07.24：东方财富模拟盘持仓更新有延迟，实测碰到过卖单4次×3秒(12秒)内还没反映到position接口，
+    但几十秒后再查已经成交——之前的窗口太短，把真实成交误判成核实失败，改成8次×5秒(40秒)。"""
     for attempt in range(retries):
         time.sleep(delay)
         cur = _get_position_count(code)

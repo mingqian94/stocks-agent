@@ -257,10 +257,11 @@ class AutoTrader:
                 return p.get('count', 0)
         return 0
 
-    def verify_position_change(self, code, baseline_count, qty, direction, retries=4, delay=3):
+    def verify_position_change(self, code, baseline_count, qty, direction, retries=8, delay=5):
         """broker说下单成功了，不代表真的成交了——下单前记一次持仓基线，
         下单后隔几秒重新查，确认股数真的按预期方向变化，而不是只信下单接口的同步响应。
-        留10%容差应对部分成交/委托数量取整误差。"""
+        留10%容差应对部分成交/委托数量取整误差。
+        2026.07.24：东方财富模拟盘实测碰到过持仓更新延迟超过12秒的情况，窗口改成8次×5秒(40秒)。"""
         for attempt in range(retries):
             time.sleep(delay)
             cur = self._get_position_count(code)
