@@ -696,6 +696,7 @@ def api_periods_game(game):
                 'avail_balance': avail_balance if is_current else 0,
                 'profit': profit if is_current else (p.get('final', p['initial']) - p['initial']),
                 'profit_pct': profit_pct if is_current else (p.get('profit_pct') or 0),
+                'rank': p.get('rank'),
                 'competition': account.get('competition', ''),
                 'platform': account.get('platform', ''),
                 'status': 'active' if is_current else 'ended'

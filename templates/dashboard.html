@@ -1287,6 +1287,7 @@
                                 <div style="font-size: 12px; color: ${profitColor};">
                                     ${profitSign}${rd.profit_pct.toFixed(2)}%
                                 </div>
+                                ${rd.rank ? `<div style="font-size: 11px; color: rgba(255,183,77,0.8); margin-top: 4px;">🏅 排名 ${rd.rank}</div>` : ''}
                             </div>
                         `;
                     }
