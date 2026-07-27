@@ -990,7 +990,7 @@
                     html += '<ul class="momentum-list" style="max-height:150px;">';
 
                     data.candidates.slice(0, 10).forEach((stock, i) => {
-                        const pct = typeof stock.pct === 'number' ? stock.pct : 0;
+                        const pct = typeof stock.day_pct === 'number' ? stock.day_pct : 0;
                         const amount = typeof stock.amount === 'number' ? stock.amount : 0;
                         html += `
                             <li style="font-size:12px;">

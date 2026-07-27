@@ -552,45 +552,33 @@ def api_logs():
 
 @app.route('/api/stock_candidates')
 def api_stock_candidates():
-    """获取符合条件的个股"""
-    url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f6'
-    for attempt in range(3):
-        try:
-            r = requests.get(url, timeout=10)
-            if r.status_code == 200:
-                data = r.json().get('data', {}).get('diff', [])
-                candidates = []
-                for item in data:
-                    code = item.get('f12', '')
-                    name = item.get('f14', '')
-                    pct = item.get('f3', 0) / 100 if item.get('f3') else 0
-                    amount = item.get('f6', 0) if item.get('f6') else 0
-                    price = item.get('f2', 0) if item.get('f2') else 0
-
-                    if 0.03 <= pct <= 0.12 and amount >= 200000000:
-                        candidates.append({
-                            'code': code,
-                            'name': name,
-                            'day_pct': pct * 100,
-                            'amount': amount,
-                            'price': price
-                        })
-
-                return jsonify({
-                    'success': True,
-                    'candidates': candidates,
-                    'total': len(candidates),
-                    'params': {
-                        'min_increase': 3,
-                        'max_increase': 12,
-                        'min_amount': 200000000
-                    }
-                })
-        except Exception as e:
-            if attempt == 2:
-                return jsonify({'success': False, 'error': str(e), 'candidates': []})
-            time.sleep(1)
-    return jsonify({'success': False, 'error': '请求失败3次', 'candidates': []})
+    """获取符合条件的个股——直接复用stock_auto_trade.py真正在跑的选股函数和参数，
+    不再自己维护一份独立实现（之前这里还是写死的3%-12%旧参数，跟实盘早就改成3%-8%+前日确认脱节了）"""
+    try:
+        sys.path.insert(0, '/Users/hetao/stocks_agent')
+        import stock_auto_trade
+        candidates = stock_auto_trade.get_stock_candidates()
+        return jsonify({
+            'success': True,
+            'candidates': [
+                {
+                    'code': c['code'],
+                    'name': c['name'],
+                    'day_pct': c['pct'] * 100,
+                    'amount': c['amount'],
+                    'price': c['price']
+                }
+                for c in candidates
+            ],
+            'total': len(candidates),
+            'params': {
+                'min_increase': stock_auto_trade.MIN_INCREASE * 100,
+                'max_increase': stock_auto_trade.MAX_INCREASE * 100,
+                'min_amount': stock_auto_trade.MIN_AMOUNT
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'candidates': []})
 
 @app.route('/api/stock_strategy_status')
 def api_stock_strategy_status():
