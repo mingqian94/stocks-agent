@@ -9,6 +9,10 @@ import datetime
 import re
 from keys_config import get_key, is_pending
 
+# 华泰证券杯初赛已结束（无下一轮，2026.07.21用户确认），ht_7493/ht_8268 永久停用。
+# auto_trade写死False、status写死'retired'——不再跟is_pending()挂钩，防止以后误改key配置就又被启用。
+RETIRED_ACCOUNTS = {'ht_7493', 'ht_8268'}
+
 ACCOUNTS = {
     'ht_7493': {
         'id': 'huatai_7493',
@@ -18,8 +22,8 @@ ACCOUNTS = {
         'competition': '华泰证券杯',
         'api_key': get_key('ht_7493'),
         'strategy_id': 'etf_momentum_stable',
-        'auto_trade': not is_pending('ht_7493'),
-        'status': 'active' if not is_pending('ht_7493') else 'pending_key'
+        'auto_trade': False,
+        'status': 'retired'
     },
     'ht_8268': {
         'id': 'huatai_8268',
@@ -29,8 +33,8 @@ ACCOUNTS = {
         'competition': '华泰证券杯',
         'api_key': get_key('ht_8268'),
         'strategy_id': 'etf_momentum_aggressive',
-        'auto_trade': not is_pending('ht_8268'),
-        'status': 'active' if not is_pending('ht_8268') else 'pending_key'
+        'auto_trade': False,
+        'status': 'retired'
     },
     'east_money': {
         'id': 'dongfang',

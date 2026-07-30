@@ -7,7 +7,7 @@ import os
 import trade_logger
 
 # 导入统一配置
-from accounts import ACCOUNTS, STRATEGIES, get_account_with_strategy, get_strategy, get_current_period
+from accounts import ACCOUNTS, STRATEGIES, get_account_with_strategy, get_strategy, get_current_period, RETIRED_ACCOUNTS
 from keys_config import get_skill_code
 
 # 平台API配置
@@ -539,6 +539,9 @@ class AutoTrader:
 
 def run_account(account_key):
     """运行单个账户的自动盯盘"""
+    if account_key in RETIRED_ACCOUNTS:
+        print(f'❌ {account_key} 已永久停用，拒绝启动（防止绕过__main__里的检查直接调用这个函数）')
+        return
     try:
         trader = AutoTrader(account_key)
         trader.log(f'🚀 自动盯盘脚本启动 | 账户: {trader.account.get("name")} | 平台: {trader.platform}')
@@ -584,6 +587,9 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         # 指定特定账户
         account_key = sys.argv[1]
+        if account_key in RETIRED_ACCOUNTS:
+            print(f'❌ {account_key} 已永久停用（华泰证券杯初赛已结束，无下一轮），拒绝启动')
+            sys.exit(1)
         if account_key in ACCOUNTS:
             run_account(account_key)
         else:

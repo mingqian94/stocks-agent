@@ -18,8 +18,8 @@
 | 账户 | 比赛 | 策略 | 目标收益 | 风险等级 | 交易模式 | 状态 |
 |------|------|------|----------|----------|----------|------|
 | 东方财富 | 东方财富杯 | 个股动量突破 | 10% | 高 | ⚡ 自动交易 | 详见`periods_local.py`（不提交） |
-| 华泰-7493 | 华泰证券杯 | ETF动量轮动（稳健型） | 8% | 低 | ⏹️ 已停止 | 初赛已结束（无下一轮），详见`periods_local.py` |
-| 华泰-8268 | 华泰证券杯 | ETF动量轮动（激进型） | 30% | 高 | ⏹️ 已停止 | 初赛已结束（无下一轮），详见`periods_local.py` |
+| 华泰-7493 | 华泰证券杯 | ETF动量轮动（稳健型） | 8% | 低 | 🚫 永久停用 | 初赛已结束（无下一轮），详见`periods_local.py`；`RETIRED_ACCOUNTS`拦截，跑不起来了 |
+| 华泰-8268 | 华泰证券杯 | ETF动量轮动（激进型） | 30% | 高 | 🚫 永久停用 | 初赛已结束（无下一轮），详见`periods_local.py`；`RETIRED_ACCOUNTS`拦截，跑不起来了 |
 
 **配置位置**：`accounts.py`，拆成三张互相独立的表——
 - `ACCOUNTS`：账号身份（平台、api_key、绑定的策略），基本不变
@@ -221,18 +221,19 @@ python3 botctl.py restart [账号|all]
 
 **网页**：dashboard 首页顶部有一张"🤖 Bot Status"卡片，实时显示三个进程是否在跑、PID、最后一条日志，每个都有停止/启动/重启按钮（背后调的是 `/api/bots/status`、`/api/bots/<stop|start|restart>`，跟命令行工具是同一套逻辑）。
 
-**开机自动拉起（launchd）**：仓库搬到`~/stocks_agent`之后launchd真的能用了，`launchd/`目录下三个plist（`com.stocks.stockautotrade`、`com.stocks.autotrade.ht7493`、`com.stocks.autotrade.ht8268`）已经装到`~/Library/LaunchAgents/`并启用，配了`RunAtLoad`+`KeepAlive`——开机或者进程意外退出都会自动重新拉起，不用再手动`nohup`。装/卸载：
+**开机自动拉起（launchd）**：仓库搬到`~/stocks_agent`之后launchd真的能用了，`launchd/`目录下的plist（`com.stocks.stockautotrade`、`com.stocks.dashboard`）已经装到`~/Library/LaunchAgents/`并启用，配了`RunAtLoad`+`KeepAlive`——开机或者进程意外退出都会自动重新拉起，不用再手动`nohup`。装/卸载：
 ```bash
 # 装
 cp launchd/com.stocks.*.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.stocks.stockautotrade.plist
-launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.stocks.autotrade.ht7493.plist
-launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.stocks.autotrade.ht8268.plist
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.stocks.dashboard.plist
 
 # 卸载（比如要手动调试的时候）
 launchctl bootout gui/501/com.stocks.stockautotrade
 ```
 `botctl.py stop`能停掉进程，但如果对应的launchd job还在，`KeepAlive`会在30秒内把它拉回来——想彻底停要么`launchctl bootout`，要么先接受"停了会自动重启"这个事实。
+
+> ⚠️ **`launchctl bootout`不是永久的**：只是把job从当前launchd会话卸载，plist文件还在`~/Library/LaunchAgents/`里——下次开机/登录，launchd会重新扫描这个目录，`RunAtLoad`一触发，进程又活了。2026.07.28电脑重启后就复现过这个问题：华泰两个账户（`com.stocks.autotrade.ht7493`/`ht8268`，初赛早就结束、已经`bootout`过）重新跑了起来，还真的交易了几笔。想让某个账户**永久**停用，光`bootout`不够，得把`~/Library/LaunchAgents/`和仓库`launchd/`目录下对应的plist文件都删掉——华泰这两个已经删了，仓库里也不再保留这两个plist（`accounts.py`里的`RETIRED_ACCOUNTS`集合 + `auto_trade.py`的`run_account()`/`__main__`双重拦截是最后一道防线，即使plist意外又出现，`python3 auto_trade.py ht_7493`也会直接拒绝启动）。
 
 ---
 

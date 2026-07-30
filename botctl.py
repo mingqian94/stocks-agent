@@ -23,6 +23,10 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 UID = os.getuid()
 LAUNCHD_AGENTS_DIR = os.path.expanduser('~/Library/LaunchAgents')
 
+# 华泰证券杯初赛已结束（无下一轮），这两个账户永久停用——auto_trade.py自己也会拒绝启动，
+# 这里加一层是为了给个清楚的提示，而不是让人以为start成功了、结果进程秒退
+RETIRED_BOTS = {'ht_7493', 'ht_8268'}
+
 BOTS = {
     'ht_7493': {
         'label': '华泰-7493',
@@ -117,6 +121,10 @@ def stop(name):
 def start(name):
     targets = list(BOTS.keys()) if name == 'all' else [name]
     for key in targets:
+        if key in RETIRED_BOTS:
+            if name != 'all':
+                print(f'{BOTS[key]["label"]}: 已永久停用（华泰证券杯初赛已结束），拒绝启动')
+            continue
         b = BOTS[key]
         label = b['launchd_label']
         plist_path = os.path.join(LAUNCHD_AGENTS_DIR, f'{label}.plist')
@@ -141,6 +149,10 @@ def start(name):
 def restart(name):
     targets = list(BOTS.keys()) if name == 'all' else [name]
     for key in targets:
+        if key in RETIRED_BOTS:
+            if name != 'all':
+                print(f'{BOTS[key]["label"]}: 已永久停用（华泰证券杯初赛已结束），拒绝重启')
+            continue
         b = BOTS[key]
         label = b['launchd_label']
         if _launchd_loaded(label):
