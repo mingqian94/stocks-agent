@@ -212,6 +212,22 @@ def _submit_order(order_type, code, qty, limit_price=None):
         json=body, timeout=10)
 
 
+# 连续失败计数：{(action, code): 次数}，同一个信号（比如某只股票的止盈）反复失败很多轮，
+# 光每轮打一条⚠️很容易被淹没在日志里没人注意到——之前688146卡了一天多才被用户看出来。
+# 累计到阈值就升级成更显眼的🆘，而且限价的让利幅度也跟着次数放宽，提高成交概率。
+_fail_counts = {}
+_ESCALATE_AT = 3  # 连续失败这么多轮（约9分钟）就升级告警
+
+
+def _record_order_result(action, code, ok):
+    key = (action, code)
+    if ok:
+        _fail_counts.pop(key, None)
+        return 0
+    _fail_counts[key] = _fail_counts.get(key, 0) + 1
+    return _fail_counts[key]
+
+
 def buy(code, qty, name='', price=None, source='自动'):
     """买入"""
     baseline = _get_position_count(code)
@@ -219,23 +235,33 @@ def buy(code, qty, name='', price=None, source='自动'):
         r = _submit_order('buy', code, qty)
         if r.status_code == 200:
             d = r.json()
-            # 市价单偶尔被broker报"获取行情最新价失败"，退回限价单重试一次（买入价格稍微加一点，确保能成交）
-            if str(d.get('code')) != '200' and '获取行情最新价失败' in str(d.get('message', '')) and price:
-                log(f'  ⚠️ 市价买入失败(broker取不到最新价): {code}，改用限价单重试')
-                r = _submit_order('buy', code, qty, limit_price=round(price * 1.02, 3))
+            # 市价单失败（不管broker报什么消息，之前只匹配"获取行情最新价失败"这一种，
+            # 万一broker换个说法拒单就又漏了）就退回限价单重试一次，价格随失败次数越让越多
+            if str(d.get('code')) != '200' and price:
+                fails = _fail_counts.get(('buy', code), 0)
+                discount = 1.02 + min(fails, 5) * 0.01  # 1.02~1.07，越失败让得越多
+                log(f'  ⚠️ 市价买入失败: {code} {d.get("message","未知")}，改用限价单重试(价格×{discount:.2f})')
+                r = _submit_order('buy', code, qty, limit_price=round(price * discount, 3))
                 d = r.json() if r.status_code == 200 else d
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
                 if baseline is not None and not verify_position_change(code, baseline, qty, 'buy'):
                     log(f'  🚨 二次核实失败: {code} broker说买入成功，但隔几秒重新查持仓股数没有相应增加，可能没真的成交，不记为成功交易')
+                    _record_order_result('buy', code, False)
                     return False
                 log(f'  ✅ 买入成功: {code} x{qty} 委托号: {order_id}（已核实持仓变化）')
                 trade_logger.record_trade(ACCOUNT_NAME, 'buy', code, name, qty, price, order_id, source)
+                _record_order_result('buy', code, True)
                 return True
-            log(f'  ⚠️ 买入失败: {code} {d.get("message","未知")}')
+            fails = _record_order_result('buy', code, False)
+            msg = f'  ⚠️ 买入失败: {code} {d.get("message","未知")}'
+            log(msg if fails < _ESCALATE_AT else f'  🆘 买入连续失败{fails}轮仍未成交: {code} {d.get("message","未知")}——可能需要人工介入')
         else:
-            log(f'  ⚠️ 买入请求失败({r.status_code}): {code}')
+            fails = _record_order_result('buy', code, False)
+            log(f'  ⚠️ 买入请求失败({r.status_code}): {code}' if fails < _ESCALATE_AT
+                else f'  🆘 买入请求连续失败{fails}轮({r.status_code}): {code}——可能需要人工介入')
     except Exception as e:
+        _record_order_result('buy', code, False)
         log(f'  ⚠️ 买入异常 {code}: {e}')
     return False
 
@@ -246,23 +272,32 @@ def sell(code, qty, name='', price=None, source='自动'):
         r = _submit_order('sell', code, qty)
         if r.status_code == 200:
             d = r.json()
-            # 市价单偶尔被broker报"获取行情最新价失败"，退回限价单重试一次（卖出价格稍微让一点，确保能成交）
-            if str(d.get('code')) != '200' and '获取行情最新价失败' in str(d.get('message', '')) and price:
-                log(f'  ⚠️ 市价卖出失败(broker取不到最新价): {code}，改用限价单重试')
-                r = _submit_order('sell', code, qty, limit_price=round(price * 0.98, 3))
+            # 市价单失败就退回限价单重试一次，价格随失败次数越让越多（不再只匹配特定错误消息）
+            if str(d.get('code')) != '200' and price:
+                fails = _fail_counts.get(('sell', code), 0)
+                discount = 0.98 - min(fails, 5) * 0.01  # 0.98~0.93，越失败让得越多
+                log(f'  ⚠️ 市价卖出失败: {code} {d.get("message","未知")}，改用限价单重试(价格×{discount:.2f})')
+                r = _submit_order('sell', code, qty, limit_price=round(price * discount, 3))
                 d = r.json() if r.status_code == 200 else d
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
                 if baseline is not None and not verify_position_change(code, baseline, qty, 'sell'):
                     log(f'  🚨 二次核实失败: {code} broker说卖出成功，但隔几秒重新查持仓股数没有相应减少，可能没真的成交，不记为成功交易')
+                    _record_order_result('sell', code, False)
                     return False
                 log(f'  ✅ 卖出成功: {code} x{qty} 委托号: {order_id}（已核实持仓变化）')
                 trade_logger.record_trade(ACCOUNT_NAME, 'sell', code, name, qty, price, order_id, source)
+                _record_order_result('sell', code, True)
                 return True
-            log(f'  ⚠️ 卖出失败: {code} {d.get("message","未知")}')
+            fails = _record_order_result('sell', code, False)
+            msg = f'  ⚠️ 卖出失败: {code} {d.get("message","未知")}'
+            log(msg if fails < _ESCALATE_AT else f'  🆘 卖出连续失败{fails}轮仍未成交: {code} {d.get("message","未知")}——可能需要人工介入')
         else:
-            log(f'  ⚠️ 卖出请求失败({r.status_code}): {code}')
+            fails = _record_order_result('sell', code, False)
+            log(f'  ⚠️ 卖出请求失败({r.status_code}): {code}' if fails < _ESCALATE_AT
+                else f'  🆘 卖出请求连续失败{fails}轮({r.status_code}): {code}——可能需要人工介入')
     except Exception as e:
+        _record_order_result('sell', code, False)
         log(f'  ⚠️ 卖出异常 {code}: {e}')
     return False
 
