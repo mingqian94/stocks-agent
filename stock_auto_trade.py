@@ -198,16 +198,32 @@ def verify_position_change(code, baseline_count, qty, direction, retries=8, dela
             return True
     return False
 
+def _submit_order(order_type, code, qty, limit_price=None):
+    """提交订单。limit_price为None时用市价单，否则用限价单（broker偶尔撮合不了市价单，
+    报"获取行情最新价失败"，这时候退回限价单绕过去）"""
+    body = {'type': order_type, 'stockCode': code, 'quantity': qty}
+    if limit_price is None:
+        body['useMarketPrice'] = True
+    else:
+        body['useMarketPrice'] = False
+        body['price'] = limit_price
+    return requests.post(f'{APIURL}/trade',
+        headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
+        json=body, timeout=10)
+
+
 def buy(code, qty, name='', price=None, source='自动'):
     """买入"""
     baseline = _get_position_count(code)
     try:
-        r = requests.post(f'{APIURL}/trade',
-            headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
-            json={'type': 'buy', 'stockCode': code, 'quantity': qty, 'useMarketPrice': True},
-            timeout=10)
+        r = _submit_order('buy', code, qty)
         if r.status_code == 200:
             d = r.json()
+            # 市价单偶尔被broker报"获取行情最新价失败"，退回限价单重试一次（买入价格稍微加一点，确保能成交）
+            if str(d.get('code')) != '200' and '获取行情最新价失败' in str(d.get('message', '')) and price:
+                log(f'  ⚠️ 市价买入失败(broker取不到最新价): {code}，改用限价单重试')
+                r = _submit_order('buy', code, qty, limit_price=round(price * 1.02, 3))
+                d = r.json() if r.status_code == 200 else d
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
                 if baseline is not None and not verify_position_change(code, baseline, qty, 'buy'):
@@ -227,12 +243,14 @@ def sell(code, qty, name='', price=None, source='自动'):
     """卖出"""
     baseline = _get_position_count(code)
     try:
-        r = requests.post(f'{APIURL}/trade',
-            headers={'apikey': APIKEY, 'Content-Type': 'application/json'},
-            json={'type': 'sell', 'stockCode': code, 'quantity': qty, 'useMarketPrice': True},
-            timeout=10)
+        r = _submit_order('sell', code, qty)
         if r.status_code == 200:
             d = r.json()
+            # 市价单偶尔被broker报"获取行情最新价失败"，退回限价单重试一次（卖出价格稍微让一点，确保能成交）
+            if str(d.get('code')) != '200' and '获取行情最新价失败' in str(d.get('message', '')) and price:
+                log(f'  ⚠️ 市价卖出失败(broker取不到最新价): {code}，改用限价单重试')
+                r = _submit_order('sell', code, qty, limit_price=round(price * 0.98, 3))
+                d = r.json() if r.status_code == 200 else d
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
                 if baseline is not None and not verify_position_change(code, baseline, qty, 'sell'):
