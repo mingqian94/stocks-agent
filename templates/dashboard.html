@@ -1085,19 +1085,23 @@
                             const dayUp = pos.day_pct >= 0;
                             const profitUp = pos.profit >= 0;
                             const dayProfitUp = pos.day_profit >= 0;
+                            // 已经清仓的持仓(count=0)broker会把costPrice重置成0，我们这边会退回用现价当成本价，
+                            // 算出来的"累计涨幅"永远是0.00%——跟旁边真实的"累计盈亏"对不上（比如+6.7万却显示+0.00%）。
+                            // 没有可靠成本价的情况下不编一个假的百分比，显示"--"更诚实
+                            const isClosed = pos.count === 0;
                             const costPrice = pos.cost_price || pos.price;
-                            const profitPct = costPrice > 0 ? ((pos.price - costPrice) / costPrice * 100) : 0;
-                            const profitUp2 = profitPct >= 0;
+                            const profitPct = (!isClosed && costPrice > 0) ? ((pos.price - costPrice) / costPrice * 100) : null;
+                            const profitUp2 = profitPct !== null && profitPct >= 0;
                             const row = document.createElement('tr');
                             row.innerHTML = `
                                 <td>${pos.name}</td>
                                 <td style="color:#666;">${pos.code}</td>
                                 <td>${pos.count.toLocaleString()}</td>
-                                <td>${costPrice.toFixed(3)}</td>
+                                <td>${isClosed ? '--' : costPrice.toFixed(3)}</td>
                                 <td>${pos.price.toFixed(3)}</td>
                                 <td class="${dayUp ? 'up' : 'down'}">${dayUp ? '+' : ''}${pos.day_pct.toFixed(2)}%</td>
                                 <td class="${dayProfitUp ? 'up' : 'down'}">${dayProfitUp ? '+' : ''}${formatNum(pos.day_profit)}</td>
-                                <td class="${profitUp2 ? 'up' : 'down'}">${profitUp2 ? '+' : ''}${profitPct.toFixed(2)}%</td>
+                                <td class="${profitPct === null ? '' : (profitUp2 ? 'up' : 'down')}">${profitPct === null ? '--' : (profitUp2 ? '+' : '') + profitPct.toFixed(2) + '%'}</td>
                                 <td class="${profitUp ? 'up' : 'down'}">${profitUp ? '+' : ''}${formatNum(pos.profit)}</td>
                                 <td>${pos.pos_pct.toFixed(2)}%</td>
                             `;
