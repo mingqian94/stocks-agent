@@ -194,9 +194,15 @@ def ensure_current_period(account_id, live_total_assets=None):
         return get_current_period(account_id)
 
     prev = periods[-1]
-    if live_total_assets is not None:
+    # 如果这期已经手动录入过官方数据（rank字段是标志），就不再用实时total_assets覆盖final/profit_pct——
+    # 之前测试时就把手动填的官方+1.14%/rank147覆盖成了实时算出来的+3.45%，这是当时的坑，现在锁死不让覆盖
+    already_locked = prev.get('rank') is not None
+    if live_total_assets is not None and not already_locked:
         prev['final'] = live_total_assets
         prev['profit_pct'] = round((live_total_assets - prev['initial']) / prev['initial'] * 100, 2)
+    elif already_locked:
+        print(f'[accounts.py] {account_id} {prev["round"]} 已经手动录入过官方数据(rank={prev["rank"]})，'
+              f'跳过用实时数字覆盖final/profit_pct')
     prev['status'] = 'done'
 
     initial = live_total_assets if live_total_assets is not None else prev.get('final') or prev['initial']
