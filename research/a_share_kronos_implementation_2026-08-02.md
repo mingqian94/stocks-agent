@@ -49,6 +49,7 @@
 - `research/results/a_share_kronos_scores.csv`
 - `research/results/a_share_kronos_backtest.csv`
 - `research/results/a_share_kronos_failures.csv`
+- `research/results/a_share_kronos_run.json`（本次 12/12 成功、覆盖率 100%、0 失败）
 
 ## 运行
 

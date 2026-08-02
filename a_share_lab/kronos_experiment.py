@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
+import json
 from pathlib import Path
 
 from .low_resource import configure_low_resource_environment
@@ -56,6 +58,24 @@ def validate_resource_budget(
         raise ValueError("low-resource mode permits at most 20 signal dates")
     if max_signal_dates <= 0:
         raise ValueError("max_signal_dates must be positive")
+
+
+def validate_score_coverage(
+    metadata: dict | None,
+    allow_partial_scores: bool = False,
+) -> None:
+    """Block performance output when model scores are incomplete by default."""
+    if metadata is None:
+        raise ValueError("score coverage metadata is required for backtesting")
+    eligible = int(metadata.get("eligible_pairs", 0))
+    failed = int(metadata.get("failed_pairs", 0))
+    succeeded = int(metadata.get("succeeded_pairs", 0))
+    if eligible <= 0 or succeeded <= 0:
+        raise ValueError("no eligible Kronos scores are available for backtesting")
+    if not allow_partial_scores and (failed > 0 or succeeded != eligible):
+        raise RuntimeError(
+            f"refusing incomplete Kronos scores: {succeeded}/{eligible}, failures={failed}"
+        )
 
 
 def _eligible_signal_dates(
@@ -113,6 +133,9 @@ def generate_scores(
     failures: list[dict] = []
     score_path = output / "a_share_kronos_scores.csv"
     failure_path = output / "a_share_kronos_failures.csv"
+    metadata_path = output / "a_share_kronos_run.json"
+    eligible_pairs = 0
+    skipped_pairs = 0
 
     def checkpoint() -> None:
         pd.DataFrame(
@@ -121,6 +144,23 @@ def generate_scores(
         pd.DataFrame(
             failures, columns=["date", "code", "error_type", "error"]
         ).to_csv(failure_path, index=False, encoding="utf-8-sig")
+        metadata = {
+            "requested_pairs": total,
+            "eligible_pairs": eligible_pairs,
+            "succeeded_pairs": len(records),
+            "failed_pairs": len(failures),
+            "skipped_not_in_universe_or_data": skipped_pairs,
+            "coverage": len(records) / eligible_pairs if eligible_pairs else 0.0,
+            "complete": bool(eligible_pairs and not failures and len(records) == eligible_pairs),
+            "codes": codes,
+            "signal_dates": [date.date().isoformat() for date in signal_dates],
+            "config": asdict(config),
+        }
+        temporary = metadata_path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        temporary.replace(metadata_path)
 
     total = len(signal_dates) * len(codes)
     number = 0
@@ -132,7 +172,10 @@ def generate_scores(
             number += 1
             print(f"Kronos score {number}/{total}: {signal_date.date()} {code}", flush=True)
             if code not in members or code not in by_code:
+                skipped_pairs += 1
+                checkpoint()
                 continue
+            eligible_pairs += 1
             symbol = by_code[code]
             try:
                 score = generator.score_symbol(code, signal_date, symbol, future_dates)
@@ -154,6 +197,7 @@ def generate_scores(
             checkpoint()
     frame = pd.DataFrame(records, columns=["date", "code", "external_score"])
     checkpoint()
+    frame.attrs["run_metadata"] = json.loads(metadata_path.read_text(encoding="utf-8"))
     return frame
 
 
@@ -164,8 +208,11 @@ def backtest_scores(
     end_date: str,
     cache_dir: Path | None = None,
     output_dir: Path | None = None,
+    run_metadata: dict | None = None,
+    allow_partial_scores: bool = False,
 ) -> dict:
     """Backtest frozen scores with observed prices and the existing engine."""
+    validate_score_coverage(run_metadata, allow_partial_scores)
     codes = list(dict.fromkeys(codes))
     cache_root = Path(cache_dir or default_cache_dir())
     output = output_dir or Path(__file__).resolve().parents[1] / "research" / "results"
@@ -186,6 +233,8 @@ def backtest_scores(
     )
     record = _flat_result(result, "kronos")
     record["kronos_universe_symbols"] = len(codes)
+    record["score_coverage"] = float(run_metadata["coverage"])
+    record["score_failures"] = int(run_metadata["failed_pairs"])
     record["validation_status"] = "engineering_pilot_not_performance_test"
     pd.DataFrame([record]).to_csv(
         output / "a_share_kronos_backtest.csv", index=False, encoding="utf-8-sig"
@@ -207,6 +256,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(__file__).resolve().parents[1] / "research" / "results",
     )
     parser.add_argument("--backtest", action="store_true")
+    parser.add_argument(
+        "--allow-partial-backtest",
+        action="store_true",
+        help="Permit an explicitly labelled engineering backtest with missing model scores",
+    )
     parser.add_argument(
         "--allow-large-run",
         action="store_true",
@@ -230,7 +284,14 @@ def main() -> None:
     print(scores.to_string(index=False))
     if args.backtest:
         result = backtest_scores(
-            args.codes, scores, args.start, args.end, args.cache_dir, args.output_dir
+            args.codes,
+            scores,
+            args.start,
+            args.end,
+            args.cache_dir,
+            args.output_dir,
+            scores.attrs.get("run_metadata"),
+            args.allow_partial_backtest,
         )
         print(result["metrics"])
 

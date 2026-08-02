@@ -1,8 +1,10 @@
 import pandas as pd
 import pytest
+import subprocess
+import sys
 
 from a_share_lab.data import load_public_subset
-from a_share_lab.kronos_experiment import validate_resource_budget
+from a_share_lab.kronos_experiment import validate_resource_budget, validate_score_coverage
 from a_share_lab.kronos_setup import verify_runtime_source
 from a_share_lab.kronos_signal import (
     KronosSignalGenerator,
@@ -151,3 +153,21 @@ def test_runtime_source_verification_rejects_local_modifications(tmp_path):
 
     with pytest.raises(RuntimeError, match="source hash mismatch"):
         verify_runtime_source(tmp_path)
+
+
+def test_score_coverage_blocks_partial_backtests_unless_explicitly_allowed():
+    complete = {"eligible_pairs": 10, "succeeded_pairs": 10, "failed_pairs": 0}
+    partial = {"eligible_pairs": 10, "succeeded_pairs": 9, "failed_pairs": 1}
+    validate_score_coverage(complete)
+    with pytest.raises(RuntimeError, match="refusing incomplete"):
+        validate_score_coverage(partial)
+    validate_score_coverage(partial, allow_partial_scores=True)
+
+
+def test_package_import_does_not_eagerly_initialize_numeric_libraries():
+    command = (
+        "import sys; import a_share_lab; "
+        "raise SystemExit(1 if 'numpy' in sys.modules or 'pandas' in sys.modules else 0)"
+    )
+    result = subprocess.run([sys.executable, "-c", command], check=False)
+    assert result.returncode == 0

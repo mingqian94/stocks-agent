@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
+import importlib
 import json
 from pathlib import Path
 import random
@@ -209,6 +210,13 @@ def load_official_predictor(
         ) from error
 
     torch.set_num_threads(config.cpu_threads)
+    if torch.get_num_interop_threads() != config.cpu_threads:
+        try:
+            torch.set_num_interop_threads(config.cpu_threads)
+        except RuntimeError as error:
+            raise RuntimeError(
+                "PyTorch interop threads were initialized before the resource cap"
+            ) from error
     random.seed(config.seed)
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
@@ -218,7 +226,21 @@ def load_official_predictor(
     from .kronos_setup import verify_runtime_source
 
     verify_runtime_source(source)
-    from model import Kronos, KronosPredictor, KronosTokenizer
+    existing_model_module = sys.modules.get("model")
+    expected_init = (source / "model" / "__init__.py").resolve()
+    if existing_model_module is not None:
+        existing_path = Path(getattr(existing_model_module, "__file__", "")).resolve()
+        if existing_path != expected_init:
+            raise RuntimeError(
+                f"refusing previously imported model module from {existing_path}"
+            )
+    model_module = importlib.import_module("model")
+    imported_path = Path(model_module.__file__).resolve()
+    if imported_path != expected_init:
+        raise RuntimeError(f"Kronos imported from unexpected path: {imported_path}")
+    Kronos = model_module.Kronos
+    KronosPredictor = model_module.KronosPredictor
+    KronosTokenizer = model_module.KronosTokenizer
 
     tokenizer = KronosTokenizer.from_pretrained(
         config.tokenizer_id, revision=config.tokenizer_revision

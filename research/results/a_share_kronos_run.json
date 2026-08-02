@@ -1,0 +1,36 @@
+{
+  "requested_pairs": 12,
+  "eligible_pairs": 12,
+  "succeeded_pairs": 12,
+  "failed_pairs": 0,
+  "skipped_not_in_universe_or_data": 0,
+  "coverage": 1.0,
+  "complete": true,
+  "codes": [
+    "sh.600000",
+    "sh.600009",
+    "sh.600010"
+  ],
+  "signal_dates": [
+    "2026-07-14",
+    "2026-07-15",
+    "2026-07-16",
+    "2026-07-17"
+  ],
+  "config": {
+    "model_id": "NeoQuasar/Kronos-mini",
+    "tokenizer_id": "NeoQuasar/Kronos-Tokenizer-base",
+    "model_revision": "f4e68697d9d5aed55cef5c96aabc3376bcad9f81",
+    "tokenizer_revision": "0e0117387f39004a9016484a186a908917e22426",
+    "source_revision": "67b630e67f6a18c9e9be918d9b4337c960db1e9a",
+    "lookback": 90,
+    "horizon": 10,
+    "temperature": 1.0,
+    "top_k": 1,
+    "top_p": 1.0,
+    "sample_count": 1,
+    "seed": 123,
+    "device": "cpu",
+    "cpu_threads": 1
+  }
+}
