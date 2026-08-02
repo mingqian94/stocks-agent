@@ -10,17 +10,14 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import json
-import os
 from pathlib import Path
 import random
 import sys
 
-# Set caps before importing NumPy/PyTorch-backed libraries.  The optional
-# Kronos runner targets low-memory desktop research, not throughput training.
-for _thread_variable in (
-    "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"
-):
-    os.environ[_thread_variable] = "1"
+from .low_resource import configure_low_resource_environment
+
+# Set caps before importing NumPy/PyTorch-backed libraries.
+configure_low_resource_environment()
 
 import numpy as np
 import pandas as pd
@@ -203,8 +200,7 @@ def load_official_predictor(
     if config.cpu_threads != 1:
         raise ValueError("this low-resource runner requires cpu_threads=1")
 
-    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
-        os.environ[name] = str(config.cpu_threads)
+    configure_low_resource_environment(config.cpu_threads)
     try:
         import torch
     except ImportError as error:
@@ -219,6 +215,9 @@ def load_official_predictor(
     source_text = str(source)
     if source_text not in sys.path:
         sys.path.insert(0, source_text)
+    from .kronos_setup import verify_runtime_source
+
+    verify_runtime_source(source)
     from model import Kronos, KronosPredictor, KronosTokenizer
 
     tokenizer = KronosTokenizer.from_pretrained(

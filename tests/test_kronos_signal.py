@@ -3,6 +3,7 @@ import pytest
 
 from a_share_lab.data import load_public_subset
 from a_share_lab.kronos_experiment import validate_resource_budget
+from a_share_lab.kronos_setup import verify_runtime_source
 from a_share_lab.kronos_signal import (
     KronosSignalGenerator,
     KronosSignalCache,
@@ -140,3 +141,13 @@ def test_default_resource_budget_blocks_accidental_large_model_runs():
     validate_resource_budget(
         [f"sh.{index:06d}" for index in range(21)], 21, allow_large_run=True
     )
+
+
+def test_runtime_source_verification_rejects_local_modifications(tmp_path):
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    for name in ("__init__.py", "kronos.py", "module.py"):
+        (model_dir / name).write_text("modified", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="source hash mismatch"):
+        verify_runtime_source(tmp_path)

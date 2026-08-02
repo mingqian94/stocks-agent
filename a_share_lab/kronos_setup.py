@@ -25,6 +25,19 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def verify_runtime_source(source: Path) -> None:
+    """Refuse locally modified or incomplete model source at inference time."""
+    for relative, expected_hash in OFFICIAL_FILE_HASHES.items():
+        path = Path(source) / relative
+        if not path.exists():
+            raise FileNotFoundError(f"Kronos source file is missing: {path}")
+        actual_hash = _sha256(path.read_bytes())
+        if actual_hash != expected_hash:
+            raise RuntimeError(
+                f"Kronos source hash mismatch for {relative}: {actual_hash}"
+            )
+
+
 def setup_runtime(target: Path | None = None, timeout: int = 120) -> Path:
     """Download three source files and verify their pinned content hashes."""
     destination = Path(target or default_source_dir())
@@ -46,6 +59,7 @@ def setup_runtime(target: Path | None = None, timeout: int = 120) -> Path:
         temporary = path.with_suffix(path.suffix + ".tmp")
         temporary.write_bytes(payload)
         temporary.replace(path)
+    verify_runtime_source(destination)
     return destination
 
 

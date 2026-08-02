@@ -14,6 +14,7 @@
 - `external_score` 已接入原 A 股引擎：收盘生成排名，下一交易日真实开盘尝试成交，继续执行 T+1、停牌、一字板、整手、税费、滑点和容量限制。
 - 默认低资源保护：最多 20 只股票 × 20 个信号日；更大运行必须显式传入 `--allow-large-run`。
 - 新增按股票文件加载的轻量数据入口，不再为一次 mini 推理加载约 170 万行全市场行情。
+- 推理启动时会重新校验官方源码哈希；批量任务逐条落盘，单票异常写入失败清单后继续，缓存可用于恢复。
 
 ## 冻结的第一版组合规则
 
@@ -47,6 +48,7 @@
 
 - `research/results/a_share_kronos_scores.csv`
 - `research/results/a_share_kronos_backtest.csv`
+- `research/results/a_share_kronos_failures.csv`
 
 ## 运行
 

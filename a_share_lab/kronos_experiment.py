@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
-for _thread_variable in (
-    "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"
-):
-    os.environ[_thread_variable] = "1"
+from .low_resource import configure_low_resource_environment
+
+configure_low_resource_environment()
 
 import pandas as pd
 
@@ -52,7 +50,7 @@ def validate_resource_budget(
     """Prevent an accidental full-universe run on a low-resource machine."""
     if allow_large_run:
         return
-    if len(set(codes)) > 20:
+    if len(codes) > 20:
         raise ValueError("low-resource mode permits at most 20 symbols")
     if max_signal_dates is None or max_signal_dates > 20:
         raise ValueError("low-resource mode permits at most 20 signal dates")
@@ -89,6 +87,7 @@ def generate_scores(
     allow_large_run: bool = False,
 ) -> pd.DataFrame:
     """Generate a bounded set of frozen scores and save resumable results."""
+    codes = list(dict.fromkeys(codes))
     config = config or KronosSignalConfig()
     validate_resource_budget(codes, max_signal_dates, allow_large_run)
     cache_root = Path(cache_dir or default_cache_dir())
@@ -111,6 +110,18 @@ def generate_scores(
     benchmark_index = {pd.Timestamp(day): index for index, day in enumerate(benchmark_dates)}
     by_code = {code: frame.copy() for code, frame in prices.groupby("code")}
     records: list[dict] = []
+    failures: list[dict] = []
+    score_path = output / "a_share_kronos_scores.csv"
+    failure_path = output / "a_share_kronos_failures.csv"
+
+    def checkpoint() -> None:
+        pd.DataFrame(
+            records, columns=["date", "code", "external_score"]
+        ).to_csv(score_path, index=False, encoding="utf-8-sig")
+        pd.DataFrame(
+            failures, columns=["date", "code", "error_type", "error"]
+        ).to_csv(failure_path, index=False, encoding="utf-8-sig")
+
     total = len(signal_dates) * len(codes)
     number = 0
     for signal_date in signal_dates:
@@ -125,14 +136,24 @@ def generate_scores(
             symbol = by_code[code]
             try:
                 score = generator.score_symbol(code, signal_date, symbol, future_dates)
-            except ValueError as error:
-                print(f"Skipped {code}: {error}", flush=True)
+            except Exception as error:
+                failures.append(
+                    {
+                        "date": signal_date,
+                        "code": code,
+                        "error_type": type(error).__name__,
+                        "error": str(error),
+                    }
+                )
+                print(f"Skipped {code}: {type(error).__name__}: {error}", flush=True)
+                checkpoint()
                 continue
             records.append(
                 {"date": signal_date, "code": code, "external_score": score}
             )
+            checkpoint()
     frame = pd.DataFrame(records, columns=["date", "code", "external_score"])
-    frame.to_csv(output / "a_share_kronos_scores.csv", index=False, encoding="utf-8-sig")
+    checkpoint()
     return frame
 
 
@@ -145,6 +166,7 @@ def backtest_scores(
     output_dir: Path | None = None,
 ) -> dict:
     """Backtest frozen scores with observed prices and the existing engine."""
+    codes = list(dict.fromkeys(codes))
     cache_root = Path(cache_dir or default_cache_dir())
     output = output_dir or Path(__file__).resolve().parents[1] / "research" / "results"
     output.mkdir(parents=True, exist_ok=True)
