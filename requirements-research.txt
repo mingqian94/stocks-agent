@@ -1,0 +1,6 @@
+# Public-data A-share research and tests. Runtime trading dependencies remain separate.
+baostock==0.9.3
+numpy>=1.26
+pandas>=2.2
+pytest>=8
+requests>=2.31

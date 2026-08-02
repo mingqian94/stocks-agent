@@ -1,0 +1,27 @@
+{
+  "rows": 1705559,
+  "symbols": 1234,
+  "membership_symbols": 1234,
+  "missing_membership_symbols": [],
+  "duplicate_date_code_rows": 0,
+  "min_date": "2020-08-14",
+  "max_date": "2026-07-31",
+  "adjustflags": [
+    3
+  ],
+  "missing_fraction": {
+    "open": 5.863180341459897e-07,
+    "high": 5.863180341459897e-07,
+    "low": 5.863180341459897e-07,
+    "close": 5.863180341459897e-07,
+    "preclose": 5.863180341459897e-07,
+    "amount": 0.001414785416394273,
+    "pctChg": 0.0014118538262235432
+  },
+  "suspended_rows": 3185,
+  "st_rows": 15376,
+  "corporate_action_gap_rows_over_50bp": 2,
+  "symbols_ending_over_45_days_early": 28,
+  "membership_snapshots": 15,
+  "benchmark_rows": 1445
+}
