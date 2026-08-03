@@ -68,6 +68,11 @@ class StrategySpec:
     minimum_external_score: float = 0.0
     exclude_limit_touch: bool = False
     market_gate: MarketGate = "none"
+    # "none" (default, byte-identical to every already-published result) keeps
+    # full target_value sizing regardless of market strength. "market_ma60_tiered"
+    # scales new-buy sizing down when the benchmark is below its own MA60,
+    # instead of the binary trade/no-trade market_gate above.
+    position_scaling: Literal["none", "market_ma60_tiered"] = "none"
 
 
 @dataclass
@@ -215,6 +220,32 @@ def select_candidates(day: pd.DataFrame, spec: StrategySpec) -> pd.DataFrame:
     else:
         raise ValueError(f"Unsupported entry model: {spec.entry_model}")
     return eligible.sort_values(["score", "amount"], ascending=[False, False])
+
+
+def _position_scale(date: pd.Timestamp, benchmark_by_date: pd.DataFrame, spec: StrategySpec) -> float:
+    """New-buy sizing multiplier for spec.position_scaling. "none" always
+    returns 1.0, so every already-published result is unaffected by this
+    field's mere existence — it only changes behaviour when explicitly opted
+    into. "market_ma60_tiered" is a coarse, theory-driven (not fitted) tiering
+    of the benchmark's close relative to its own MA60: full size once the
+    benchmark is at/above its MA60, half size within 5% below it, quarter size
+    if more than 5% below — a continuous "how much is the market resisting"
+    dial instead of the binary market_gate's "trade at all or not"."""
+    if spec.position_scaling == "none":
+        return 1.0
+    if date not in benchmark_by_date.index:
+        return 1.0
+    row = benchmark_by_date.loc[date]
+    ma60 = row.get("ma60", np.nan)
+    close = row.get("close", np.nan)
+    if pd.isna(ma60) or pd.isna(close) or ma60 <= 0:
+        return 1.0
+    ratio = close / ma60
+    if ratio >= 1.0:
+        return 1.0
+    if ratio >= 0.95:
+        return 0.5
+    return 0.25
 
 
 def _price_limit(code: str) -> float:
@@ -443,7 +474,8 @@ def run_backtest(
                 execution_audit["sell_blocked_limit"] += 1
 
         equity_open = portfolio_value(day_rows, "open")
-        target_value = equity_open * config.investable_fraction / spec.max_positions
+        scale = _position_scale(date, benchmark_by_date, spec)
+        target_value = equity_open * config.investable_fraction / spec.max_positions * scale
         for code in list(pending_buys):
             execution_audit["buy_attempts"] += 1
             if code in positions:
