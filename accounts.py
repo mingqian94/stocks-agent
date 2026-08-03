@@ -156,8 +156,11 @@ def add_period(account_id, round_name, period_str, initial, final=None, profit_p
         'status': status
     })
 
-# 每周滚动一期的账号（东方财富杯规则：每周一期）；华泰是初赛长周期，不在这里滚动
-WEEKLY_ROLLING_ACCOUNTS = {'east_money'}
+# 每周滚动一期的账号（东方财富杯规则：每周一期）。
+# 2026-08-03：东方财富杯比赛已结束(用户确认)，east_money不再有"期数/排名"概念，
+# 账户继续模拟盘跑、策略可以接着迭代，但去掉每周自动滚动——不然ensure_current_period()
+# 会一直按自然周开新的空"期"，dashboard上一堆没有排名意义的期数记录
+WEEKLY_ROLLING_ACCOUNTS = set()
 
 def _week_bounds(d):
     """d 所在自然周的周一/周五日期"""
