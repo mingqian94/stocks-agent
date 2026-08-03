@@ -10,6 +10,7 @@ import requests
 import datetime
 import sys
 import trade_logger
+import friction_log
 
 # ⚠️ API Key 统一从 keys_config.py 读取，不要在这里写死
 from accounts import get_current_account
@@ -181,6 +182,19 @@ def _get_position_count(code):
             return p.get('count', 0)
     return 0
 
+def _get_position_cost_price(code):
+    """查某只股票当前的真实成本均价（买入成交后用，broker撮合完会把costPrice更新成真实成交均价）。
+    查不到返回None——用于记录真实摩擦数据，不是交易决策，查不到就不记那一项，不影响交易本身。"""
+    pos_data = get_positions()
+    if not pos_data:
+        return None
+    for p in pos_data.get('posList', []):
+        if p.get('secCode') == code:
+            cost = p.get('costPrice', 0)
+            dec = p.get('costPriceDec', 3)
+            return cost / (10 ** dec) if cost else None
+    return None
+
 def verify_position_change(code, baseline_count, qty, direction, retries=8, delay=5):
     """broker说下单成功了，不代表真的成交了——下单前记一次持仓基线，
     下单后隔几秒重新查，确认股数真的按预期方向变化，而不是只信下单接口的同步响应。
@@ -231,6 +245,7 @@ def _record_order_result(action, code, ok):
 def buy(code, qty, name='', price=None, source='自动'):
     """买入"""
     baseline = _get_position_count(code)
+    order_type, limit_price = 'market', None
     try:
         r = _submit_order('buy', code, qty)
         if r.status_code == 200:
@@ -241,33 +256,47 @@ def buy(code, qty, name='', price=None, source='自动'):
                 fails = _fail_counts.get(('buy', code), 0)
                 discount = 1.02 + min(fails, 5) * 0.01  # 1.02~1.07，越失败让得越多
                 log(f'  ⚠️ 市价买入失败: {code} {d.get("message","未知")}，改用限价单重试(价格×{discount:.2f})')
-                r = _submit_order('buy', code, qty, limit_price=round(price * discount, 3))
+                order_type, limit_price = 'limit', round(price * discount, 2)
+                r = _submit_order('buy', code, qty, limit_price=limit_price)
                 d = r.json() if r.status_code == 200 else d
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
                 if baseline is not None and not verify_position_change(code, baseline, qty, 'buy'):
                     log(f'  🚨 二次核实失败: {code} broker说买入成功，但隔几秒重新查持仓股数没有相应增加，可能没真的成交，不记为成功交易')
-                    _record_order_result('buy', code, False)
+                    fails = _record_order_result('buy', code, False)
+                    friction_log.record_friction(ACCOUNT_NAME, 'buy', code, name, price, order_type, limit_price,
+                        fails, 'failed', note='broker说成功但二次核实没查到持仓变化')
                     return False
                 log(f'  ✅ 买入成功: {code} x{qty} 委托号: {order_id}（已核实持仓变化）')
                 trade_logger.record_trade(ACCOUNT_NAME, 'buy', code, name, qty, price, order_id, source)
-                _record_order_result('buy', code, True)
+                fails = _record_order_result('buy', code, True)
+                actual_fill_price = _get_position_cost_price(code)
+                friction_log.record_friction(ACCOUNT_NAME, 'buy', code, name, price, order_type, limit_price,
+                    fails, 'success', actual_fill_price=actual_fill_price,
+                    note='' if actual_fill_price else '查不到真实成交均价')
                 return True
             fails = _record_order_result('buy', code, False)
             msg = f'  ⚠️ 买入失败: {code} {d.get("message","未知")}'
             log(msg if fails < _ESCALATE_AT else f'  🆘 买入连续失败{fails}轮仍未成交: {code} {d.get("message","未知")}——可能需要人工介入')
+            friction_log.record_friction(ACCOUNT_NAME, 'buy', code, name, price, order_type, limit_price,
+                fails, 'failed', note=d.get('message', '未知'))
         else:
             fails = _record_order_result('buy', code, False)
             log(f'  ⚠️ 买入请求失败({r.status_code}): {code}' if fails < _ESCALATE_AT
                 else f'  🆘 买入请求连续失败{fails}轮({r.status_code}): {code}——可能需要人工介入')
+            friction_log.record_friction(ACCOUNT_NAME, 'buy', code, name, price, order_type, limit_price,
+                fails, 'failed', note=f'HTTP {r.status_code}')
     except Exception as e:
-        _record_order_result('buy', code, False)
+        fails = _record_order_result('buy', code, False)
         log(f'  ⚠️ 买入异常 {code}: {e}')
+        friction_log.record_friction(ACCOUNT_NAME, 'buy', code, name, price, order_type, limit_price,
+            fails, 'failed', note=f'异常: {e}')
     return False
 
 def sell(code, qty, name='', price=None, source='自动'):
     """卖出"""
     baseline = _get_position_count(code)
+    order_type, limit_price = 'market', None
     try:
         r = _submit_order('sell', code, qty)
         if r.status_code == 200:
@@ -277,28 +306,43 @@ def sell(code, qty, name='', price=None, source='自动'):
                 fails = _fail_counts.get(('sell', code), 0)
                 discount = 0.98 - min(fails, 5) * 0.01  # 0.98~0.93，越失败让得越多
                 log(f'  ⚠️ 市价卖出失败: {code} {d.get("message","未知")}，改用限价单重试(价格×{discount:.2f})')
-                r = _submit_order('sell', code, qty, limit_price=round(price * discount, 3))
+                order_type, limit_price = 'limit', round(price * discount, 2)
+                r = _submit_order('sell', code, qty, limit_price=limit_price)
                 d = r.json() if r.status_code == 200 else d
             if str(d.get('code')) == '200':
                 order_id = d.get('data', {}).get('orderID', '?')
                 if baseline is not None and not verify_position_change(code, baseline, qty, 'sell'):
                     log(f'  🚨 二次核实失败: {code} broker说卖出成功，但隔几秒重新查持仓股数没有相应减少，可能没真的成交，不记为成功交易')
-                    _record_order_result('sell', code, False)
+                    fails = _record_order_result('sell', code, False)
+                    friction_log.record_friction(ACCOUNT_NAME, 'sell', code, name, price, order_type, limit_price,
+                        fails, 'failed', note='broker说成功但二次核实没查到持仓变化')
                     return False
                 log(f'  ✅ 卖出成功: {code} x{qty} 委托号: {order_id}（已核实持仓变化）')
                 trade_logger.record_trade(ACCOUNT_NAME, 'sell', code, name, qty, price, order_id, source)
-                _record_order_result('sell', code, True)
+                fails = _record_order_result('sell', code, True)
+                # 卖出这个API拿不到精确成交均价，持仓已经没了查不回来——用限价单价格(如果用了)或决策价近似，
+                # note里说清楚这不是真实成交价，只是参考
+                approx_price = limit_price if limit_price else price
+                friction_log.record_friction(ACCOUNT_NAME, 'sell', code, name, price, order_type, limit_price,
+                    fails, 'success', actual_fill_price=approx_price,
+                    note='卖出API拿不到真实成交价，此为限价/决策价近似' if approx_price else '')
                 return True
             fails = _record_order_result('sell', code, False)
             msg = f'  ⚠️ 卖出失败: {code} {d.get("message","未知")}'
             log(msg if fails < _ESCALATE_AT else f'  🆘 卖出连续失败{fails}轮仍未成交: {code} {d.get("message","未知")}——可能需要人工介入')
+            friction_log.record_friction(ACCOUNT_NAME, 'sell', code, name, price, order_type, limit_price,
+                fails, 'failed', note=d.get('message', '未知'))
         else:
             fails = _record_order_result('sell', code, False)
             log(f'  ⚠️ 卖出请求失败({r.status_code}): {code}' if fails < _ESCALATE_AT
                 else f'  🆘 卖出请求连续失败{fails}轮({r.status_code}): {code}——可能需要人工介入')
+            friction_log.record_friction(ACCOUNT_NAME, 'sell', code, name, price, order_type, limit_price,
+                fails, 'failed', note=f'HTTP {r.status_code}')
     except Exception as e:
-        _record_order_result('sell', code, False)
+        fails = _record_order_result('sell', code, False)
         log(f'  ⚠️ 卖出异常 {code}: {e}')
+        friction_log.record_friction(ACCOUNT_NAME, 'sell', code, name, price, order_type, limit_price,
+            fails, 'failed', note=f'异常: {e}')
     return False
 
 def check_and_trade():
