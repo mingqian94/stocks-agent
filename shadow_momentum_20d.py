@@ -11,13 +11,19 @@ research/results/a_share_strategy_specs.json 里 risk_adjusted20_4_ma20 完全�
 重新跑一遍回测——这样"实时纸面结果"和"当初验证过的规则"保证是同一套代码，不会因为
 另外手写一套实时交易循环而产生逻辑分叉。
 
+2026-08-03新增第二条平行观察线（`regime_sized`）：跟
+research/a_share_regime_sizing_2026-08-03.md 里验证过的"大盘调仓位"变体完全一致
+（`position_scaling='market_ma60_tiered'`，其它参数不变）——那次实验发现这个变体
+训练期和样本外同时改善、没有出现反转，值得跟原版(`baseline`)并排观察对比。
+
 用法：
-    python3 shadow_momentum_20d.py          # 跑一次，日结用
+    python3 shadow_momentum_20d.py          # 跑一次，日结用，两条观察线都会记
 """
 from __future__ import annotations
 
 import datetime
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -38,7 +44,7 @@ FROZEN_START_DATE = '2026-08-04'
 # 跟 a_share_lab/experiments.py 里 risk_adjusted20_4_ma20、
 # research/results/a_share_strategy_specs.json 里存的定义完全一致，不能私自调参数——
 # 调了就不是"观察报告里验证过的方案"了
-SPEC = StrategySpec(
+BASE_SPEC = StrategySpec(
     name='risk_adjusted20_4_ma20',
     entry_model='risk_adjusted_20d',
     max_positions=4,
@@ -47,6 +53,12 @@ SPEC = StrategySpec(
     max_holding_days=20,
     exit_model='ma20',
 )
+
+# variant名 -> StrategySpec，两条都跑，NAV_LOG/TRADE_LOG按variant列区分，互不覆盖
+VARIANTS = {
+    'baseline': BASE_SPEC,
+    'regime_sized': replace(BASE_SPEC, position_scaling='market_ma60_tiered'),
+}
 
 _DIR = Path(__file__).resolve().parent
 NAV_LOG = _DIR / 'shadow_momentum_20d_nav.local.csv'
@@ -123,14 +135,16 @@ def _incremental_update_cache(cache_dir: Path, end_date: str) -> tuple[int, list
     return updated, failed
 
 
-def _append_nav_row(row: dict) -> None:
-    """按日期去重追加，重复跑同一天不会在日志里留两行。"""
+def _append_nav_rows(rows: list[dict]) -> None:
+    """按(date, variant)去重追加，重复跑同一天不会在日志里留重复行。"""
+    new_df = pd.DataFrame(rows)
     if NAV_LOG.exists():
         existing = pd.read_csv(NAV_LOG)
-        existing = existing[existing['date'] != row['date']]
-        combined = pd.concat([existing, pd.DataFrame([row])], ignore_index=True)
+        key = list(zip(new_df['date'], new_df['variant']))
+        existing = existing[~existing.apply(lambda r: (r['date'], r['variant']) in key, axis=1)]
+        combined = pd.concat([existing, new_df], ignore_index=True)
     else:
-        combined = pd.DataFrame([row])
+        combined = new_df
     combined.to_csv(NAV_LOG, index=False)
 
 
@@ -145,36 +159,47 @@ def run() -> None:
 
     bundle = load_public_bundle(cache_dir)
     features = prepare_features(bundle.prices)
-    result = run_backtest(
-        features, bundle.memberships, bundle.benchmark, SPEC,
-        start_date=FROZEN_START_DATE, end_date=today,
-    )
-
-    equity_curve = result['equity_curve']
-    if equity_curve.empty:
-        print(f'{today}: 冻结观察从{FROZEN_START_DATE}开始，还没有可用的交易日结果')
-        return
-
-    latest = equity_curve.iloc[-1]
     initial_capital = BacktestConfig().initial_capital
-    nav = float(latest['equity']) / initial_capital
-    row = {
-        'date': today,
-        'equity': round(float(latest['equity']), 2),
-        'nav': round(nav, 4),
-        'positions': int(latest['positions']),
-        'total_return_pct': round((nav - 1) * 100, 2),
-    }
-    _append_nav_row(row)
 
-    trades = result['trades']
-    if not trades.empty:
-        trades.to_csv(TRADE_LOG, index=False)
+    rows = []
+    all_trades = []
+    for variant, spec in VARIANTS.items():
+        result = run_backtest(
+            features, bundle.memberships, bundle.benchmark, spec,
+            start_date=FROZEN_START_DATE, end_date=today,
+        )
+        equity_curve = result['equity_curve']
+        if equity_curve.empty:
+            print(f'{today} [{variant}]: 冻结观察从{FROZEN_START_DATE}开始，还没有可用的交易日结果')
+            continue
 
-    print(
-        f"[{today}] 纸面观察(风险调整20日动量): "
-        f"净值{nav:.4f} 累计{row['total_return_pct']}% 当前持仓{row['positions']}只"
-    )
+        latest = equity_curve.iloc[-1]
+        nav = float(latest['equity']) / initial_capital
+        row = {
+            'date': today,
+            'variant': variant,
+            'equity': round(float(latest['equity']), 2),
+            'nav': round(nav, 4),
+            'positions': int(latest['positions']),
+            'total_return_pct': round((nav - 1) * 100, 2),
+        }
+        rows.append(row)
+
+        trades = result['trades']
+        if not trades.empty:
+            trades = trades.copy()
+            trades['variant'] = variant
+            all_trades.append(trades)
+
+        print(
+            f"[{today}] 纸面观察(风险调整20日动量·{variant}): "
+            f"净值{nav:.4f} 累计{row['total_return_pct']}% 当前持仓{row['positions']}只"
+        )
+
+    if rows:
+        _append_nav_rows(rows)
+    if all_trades:
+        pd.concat(all_trades, ignore_index=True).to_csv(TRADE_LOG, index=False)
 
 
 if __name__ == '__main__':
