@@ -840,15 +840,28 @@
                 const data = await response.json();
                 const points = (data.success && data.points) ? data.points : [];
 
-                // "本周"/"本月"的真实收益金额/收益率，从这段真实历史点位算，不再用day×5/×22瞎推算
+                // "本周"/"本月"的真实收益金额/收益率，从这段真实历史点位算，不再用day×5/×22瞎推算；
+                // benchmark_pct是同一段真实时间窗口里中证800的涨跌幅(后端算好的)，减一下就是跑赢/跑输基准
+                const benchmarkPct = data.benchmark_pct;
+                const hasBenchmark = benchmarkPct !== null && benchmarkPct !== undefined;
                 if (currentProfitPeriod === 'week' || currentProfitPeriod === 'month') {
                     if (points.length >= 2) {
                         const first = points[0].total_assets, last = points[points.length - 1].total_assets;
                         const amount = last - first;
-                        window.profitData[currentProfitPeriod] = { amount, rate: (amount / first) * 100, beat: null };
+                        const rate = (amount / first) * 100;
+                        window.profitData[currentProfitPeriod] = { amount, rate, beat: hasBenchmark ? rate - benchmarkPct : null };
                     } else {
                         window.profitData[currentProfitPeriod] = null;
                     }
+                    updateProfitDisplay();
+                } else if (currentProfitPeriod === 'all' && window.profitData && window.profitData.all) {
+                    // "累计"的金额/收益率沿用updateProfitData已经算好的since_inception真实数字，
+                    // 这里只补一个beat——注意基准窗口取的是nav_history日志能覆盖到的范围，
+                    // 可能比since_inception的真实起点短（日志有轮转/中途才开始记），是近似值不是精确值
+                    window.profitData.all = {
+                        ...window.profitData.all,
+                        beat: hasBenchmark ? window.profitData.all.rate - benchmarkPct : null,
+                    };
                     updateProfitDisplay();
                 }
 
@@ -1292,6 +1305,7 @@
                                     ${profitSign}${rd.profit_pct.toFixed(2)}%
                                 </div>
                                 ${rd.rank ? `<div style="font-size: 11px; color: rgba(255,183,77,0.8); margin-top: 4px;">🏅 排名 ${rd.rank}</div>` : ''}
+                                ${(rd.excess_pct !== null && rd.excess_pct !== undefined) ? `<div style="font-size: 11px; color: ${rd.excess_pct >= 0 ? '#ff4757' : '#2ed573'}; margin-top: 2px;">${rd.excess_pct >= 0 ? '▲' : '▼'} 跑${rd.excess_pct >= 0 ? '赢' : '输'}基准${rd.excess_pct >= 0 ? '+' : ''}${rd.excess_pct.toFixed(2)}%</div>` : ''}
                             </div>
                         `;
                     }

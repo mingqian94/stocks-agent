@@ -215,10 +215,11 @@ def api_positions(game):
             total_profit = total_assets - initial
             profit_pct = (total_profit / initial) * 100
             
-            # 获取基准
+            # 获取基准（中证800指数，2026-08-04起统一用这个而不是沪深300ETF，
+            # 跟periods_local.py的market_pct/a_share_lab研究基准口径一致）
             benchmark_day_pct = 0.0
             try:
-                r = requests.get('https://push2.eastmoney.com/api/qt/stock/get?secid=1.510300&fields=f43,f60,f170', timeout=5)
+                r = requests.get('https://push2.eastmoney.com/api/qt/stock/get?secid=1.000906&fields=f43,f60,f170', timeout=5)
                 if r.status_code == 200:
                     d = r.json().get('data', {})
                     benchmark_day_pct = (d.get('f170', 0) or 0) / 100.0
@@ -287,10 +288,11 @@ def api_positions(game):
                 'profit': profit,
                 'pos_pct': pos_pct
             })
-        # 获取今日基准（沪深300）
+        # 获取今日基准（中证800指数，2026-08-04起统一用这个而不是沪深300ETF，
+        # 跟periods_local.py的market_pct/a_share_lab研究基准口径一致）
         benchmark_day_pct = 0.0
         try:
-            r = requests.get('https://push2.eastmoney.com/api/qt/stock/get?secid=1.510300&fields=f43,f170', timeout=5)
+            r = requests.get('https://push2.eastmoney.com/api/qt/stock/get?secid=1.000906&fields=f43,f170', timeout=5)
             if r.status_code == 200:
                 d = r.json().get('data', {})
                 benchmark_day_pct = (d.get('f170', 0) or 0) / 100.0
@@ -697,6 +699,10 @@ def api_periods_game(game):
                 'profit': profit if is_current else (p.get('final', p['initial']) - p['initial']),
                 'profit_pct': profit_pct if is_current else (p.get('profit_pct') or 0),
                 'rank': p.get('rank'),
+                # market_pct/excess_pct只在periods_local.py里手动填过的已结束期才有；
+                # 进行中的这期没有实时基准可比，前端拿到None就不显示这个字段
+                'market_pct': None if is_current else p.get('market_pct'),
+                'excess_pct': None if is_current else p.get('excess_pct'),
                 'competition': account.get('competition', ''),
                 'platform': account.get('platform', ''),
                 'status': 'active' if is_current else 'ended'
@@ -749,6 +755,33 @@ NAV_LOG_MAP = {
 }
 NAV_LINE_RE = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*总资产[:：]\s*([\d.]+)元')
 
+def _benchmark_range_pct(start_date, end_date):
+    """中证800(sh.000906)在[start_date, end_date]（YYYY-MM-DD）区间的累计涨跌幅(%)。
+    用baostock查区间内第一条和最后一条收盘价算涨跌幅；查不到/不够两条就返回None，不编数字。
+    只在"本周/本月/累计"tab被点开时才调用，不在3分钟轮询的热路径上，可以接受这个延迟。"""
+    try:
+        import baostock as bs
+        login = bs.login()
+        if login.error_code != '0':
+            return None
+        try:
+            rs = bs.query_history_k_data_plus(
+                'sh.000906', 'date,close', start_date=start_date, end_date=end_date, frequency='d')
+            closes = []
+            while rs.next():
+                closes.append(rs.get_row_data()[1])
+            if len(closes) < 2:
+                return None
+            first_close, last_close = float(closes[0]), float(closes[-1])
+            if first_close <= 0:
+                return None
+            return round((last_close / first_close - 1) * 100, 2)
+        finally:
+            bs.logout()
+    except Exception:
+        return None
+
+
 @app.route('/api/nav_history/<game>')
 def api_nav_history(game):
     """从交易日志里解析总资产快照，给收益分析的折线图用。range: day/week/month/all"""
@@ -781,6 +814,14 @@ def api_nav_history(game):
                 points = [p for p in points
                           if datetime.datetime.strptime(p['time'], '%Y-%m-%d %H:%M:%S') >= cutoff]
 
+        # "本周/本月/累计"顺手算一下这段真实时间窗口里中证800涨了多少，前端用来算跑赢/跑输基准；
+        # "今日"已经有实时基准(benchmark_day_pct)算过了，这里不重复算
+        benchmark_pct = None
+        if range_key in ('week', 'month', 'all') and len(points) >= 2:
+            start_date = points[0]['time'][:10]
+            end_date = points[-1]['time'][:10]
+            benchmark_pct = _benchmark_range_pct(start_date, end_date)
+
         # 降采样，避免几千个点糊在一起；强制保留最后一个点，不然图表右端会比实际数据旧
         if len(points) > 200:
             step = len(points) // 200
@@ -789,7 +830,7 @@ def api_nav_history(game):
                 sampled[-1] = points[-1]
             points = sampled
 
-        return jsonify({'success': True, 'points': points})
+        return jsonify({'success': True, 'points': points, 'benchmark_pct': benchmark_pct})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
