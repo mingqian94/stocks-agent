@@ -26,15 +26,19 @@ import pandas as pd
 
 KRONOS_COLUMNS = ["open", "high", "low", "close", "volume", "amount"]
 
+OFFICIAL_MODEL_TOKENIZER_PAIRS = {
+    "NeoQuasar/Kronos-mini": "NeoQuasar/Kronos-Tokenizer-2k",
+}
+
 
 @dataclass(frozen=True)
 class KronosSignalConfig:
     """A fully versioned, resource-bounded inference specification."""
 
     model_id: str = "NeoQuasar/Kronos-mini"
-    tokenizer_id: str = "NeoQuasar/Kronos-Tokenizer-base"
+    tokenizer_id: str = "NeoQuasar/Kronos-Tokenizer-2k"
     model_revision: str = "f4e68697d9d5aed55cef5c96aabc3376bcad9f81"
-    tokenizer_revision: str = "0e0117387f39004a9016484a186a908917e22426"
+    tokenizer_revision: str = "26966d0035065a0cae0ebad7af8ece35bc1fb51c"
     source_revision: str = "67b630e67f6a18c9e9be918d9b4337c960db1e9a"
     lookback: int = 90
     horizon: int = 10
@@ -51,6 +55,16 @@ class KronosSignalConfig:
 class CachedSignal:
     score: float
     forecast_close: list[float]
+
+
+def validate_official_pairing(config: KronosSignalConfig) -> None:
+    """Reject model/tokenizer combinations outside this runner's pinned support."""
+    expected_tokenizer = OFFICIAL_MODEL_TOKENIZER_PAIRS.get(config.model_id)
+    if expected_tokenizer is None or config.tokenizer_id != expected_tokenizer:
+        raise ValueError(
+            "Kronos model/tokenizer must use the official pairing: "
+            f"{config.model_id} requires {expected_tokenizer or 'a supported tokenizer'}"
+        )
 
 
 def _input_fingerprint(
@@ -191,6 +205,7 @@ def load_official_predictor(
     config: KronosSignalConfig,
 ):
     """Load the pinned official runtime with strict local resource caps."""
+    validate_official_pairing(config)
     source = Path(source_dir).resolve()
     if not (source / "model" / "__init__.py").exists():
         raise FileNotFoundError(

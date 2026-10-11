@@ -37,24 +37,26 @@
 python -m pip install -r requirements-research.txt
 python -m a_share_lab.experiments --download
 python -m a_share_lab.horizons
+python -m a_share_lab.sequoia_x
 ```
 
 免费接口可能更正历史数据或调整可用性，因此未来重新下载的文件哈希不保证与 2026-08-02 的本地快照完全一致。该数据集也不能消除半年度成分股近似、退市覆盖、盘口排队和分钟成交路径等限制。
 
 ## 策略研究
 
-现有研究覆盖原策略、日度排名、突破持有期、市场均线门控、5 日动量、20 日风险调整动量、10 日反转，以及可选的 Kronos K 线预测分数。所有成交仍由统一 A 股引擎处理：收盘后信号、下一开盘、T+1、停牌、一字板、整手、分时代税费、佣金、滑点和成交容量。
+现有研究覆盖原策略、日度排名、突破持有期、市场均线门控、5 日动量、20 日风险调整动量、10 日反转、三个独立重写的 Sequoia-X 规则假设，以及可选的 Kronos K 线预测分数。所有成交仍由统一 A 股引擎处理：收盘后信号、下一开盘、T+1、停牌、一字板、整手、分时代税费、佣金、滑点和成交容量。
 
 - 使用说明：[`a_share_lab/README.md`](a_share_lab/README.md)
 - 完整回测结论：[`research/a_share_backtest_report_2026-08-02.md`](research/a_share_backtest_report_2026-08-02.md)
 - 多周期结果：[`research/a_share_multi_horizon_report_2026-08-02.md`](research/a_share_multi_horizon_report_2026-08-02.md)
 - Kronos 接入与资源验证：[`research/a_share_kronos_implementation_2026-08-02.md`](research/a_share_kronos_implementation_2026-08-02.md)
+- Kronos 配对修正与 Sequoia-X 回测：[`research/a_share_kronos_sequoia_x_experiment_2026-10-10.md`](research/a_share_kronos_sequoia_x_experiment_2026-10-10.md)
 
 ## Kronos 的使用边界
 
 可选模型来自清华团队开源的 [shiyu-coder/Kronos](https://github.com/shiyu-coder/Kronos)。本仓库没有复制其预训练数据，也没有照搬官方 Qlib 撮合；只按固定 revision 下载最小推理源码和公开权重，把预测结果转换为横截面分数，再交给本项目的 A 股撮合引擎。
 
-当前本机只完成 `Kronos-mini` 的 3 股票 × 4 信号日工程验证。该结果用于证明模型、缓存和撮合链路可运行，不构成策略收益或实盘有效性证明。
+当前固定官方配对 `Kronos-mini + Kronos-Tokenizer-2k`，本机只完成 3 股票 × 4 信号日工程验证。该结果用于证明模型、缓存和撮合链路可运行，不构成策略收益或实盘有效性证明。
 
 ## 风险提示
 

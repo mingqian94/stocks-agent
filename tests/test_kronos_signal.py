@@ -12,7 +12,21 @@ from a_share_lab.kronos_signal import (
     KronosSignalConfig,
     build_kronos_input,
     forecast_mean_close_score,
+    validate_official_pairing,
 )
+
+
+def test_default_kronos_config_uses_official_mini_tokenizer_pair():
+    config = KronosSignalConfig()
+
+    assert config.model_id == "NeoQuasar/Kronos-mini"
+    assert config.tokenizer_id == "NeoQuasar/Kronos-Tokenizer-2k"
+    validate_official_pairing(config)
+
+    with pytest.raises(ValueError, match="official pairing"):
+        validate_official_pairing(
+            KronosSignalConfig(tokenizer_id="NeoQuasar/Kronos-Tokenizer-base")
+        )
 
 
 def test_build_kronos_input_uses_only_history_and_rescales_raw_ohlc():

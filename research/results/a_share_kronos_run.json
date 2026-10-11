@@ -19,9 +19,9 @@
   ],
   "config": {
     "model_id": "NeoQuasar/Kronos-mini",
-    "tokenizer_id": "NeoQuasar/Kronos-Tokenizer-base",
+    "tokenizer_id": "NeoQuasar/Kronos-Tokenizer-2k",
     "model_revision": "f4e68697d9d5aed55cef5c96aabc3376bcad9f81",
-    "tokenizer_revision": "0e0117387f39004a9016484a186a908917e22426",
+    "tokenizer_revision": "26966d0035065a0cae0ebad7af8ece35bc1fb51c",
     "source_revision": "67b630e67f6a18c9e9be918d9b4337c960db1e9a",
     "lookback": 90,
     "horizon": 10,

@@ -21,7 +21,7 @@ import pandas as pd
 
 EntryModel = Literal[
     "daily_breakout", "daily_rank", "momentum_5d", "risk_adjusted_20d", "reversal_10d",
-    "external_score",
+    "external_score", "high_tight_flag", "rps120_near_high", "ma5_cross_ma20_volume15",
 ]
 ExitModel = Literal["fixed_only", "ma20", "ma60", "momentum_5d"]
 MarketGate = Literal["none", "ma20", "ma60"]
@@ -217,6 +217,34 @@ def select_candidates(day: pd.DataFrame, spec: StrategySpec) -> pd.DataFrame:
         )
         eligible = eligible[mask]
         eligible["score"] = eligible["external_score"]
+    elif spec.entry_model == "high_tight_flag":
+        strength = eligible["high40"] / eligible["low40"]
+        consolidation = eligible["high10"] / eligible["low10"]
+        mask = (
+            (strength > 1.60)
+            & (consolidation < 1.15)
+            & (eligible["low10"] >= eligible["high40"] * 0.80)
+            & (eligible["volume"] < eligible["volume20_lag1"] * 0.60)
+        )
+        eligible = eligible[mask]
+        eligible["score"] = strength[mask]
+    elif spec.entry_model == "rps120_near_high":
+        eligible["rps120"] = eligible["return_120d"].rank(pct=True) * 100.0
+        mask = (
+            (eligible["rps120"] >= 90.0)
+            & (eligible["signal_price"] >= eligible["high120"] * 0.90)
+        )
+        eligible = eligible[mask]
+        eligible["score"] = eligible["rps120"]
+    elif spec.entry_model == "ma5_cross_ma20_volume15":
+        volume_ratio = eligible["volume"] / eligible["volume20"]
+        mask = (
+            (eligible["ma5_previous"] < eligible["ma20_previous"])
+            & (eligible["ma5"] > eligible["ma20"])
+            & (volume_ratio > 1.50)
+        )
+        eligible = eligible[mask]
+        eligible["score"] = volume_ratio[mask]
     else:
         raise ValueError(f"Unsupported entry model: {spec.entry_model}")
     return eligible.sort_values(["score", "amount"], ascending=[False, False])

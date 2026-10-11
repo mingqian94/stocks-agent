@@ -10,6 +10,7 @@
 python -m pip install -r requirements-research.txt
 python -m a_share_lab.experiments --download
 python -m a_share_lab.horizons
+python -m a_share_lab.sequoia_x
 python -m pytest -q tests/test_a_share_lab.py
 ```
 
@@ -17,7 +18,7 @@ python -m pytest -q tests/test_a_share_lab.py
 
 Kronos 仅产生收盘后横截面分数，实际成交仍由本目录的 A 股撮合引擎处理。
 模型、tokenizer、官方源码提交、随机种子和采样参数均固定；默认使用 CPU、1 线程、
-`Kronos-mini`、batch 1、sample 1。模型权重和预测缓存不会写入 Git。
+官方配对 `Kronos-mini + Kronos-Tokenizer-2k`、batch 1、sample 1。模型权重和预测缓存不会写入 Git；加载器会拒绝已知的非官方模型/tokenizer 配对。
 
 ```powershell
 python -m pip install -r requirements-kronos.txt

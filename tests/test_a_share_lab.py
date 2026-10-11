@@ -15,6 +15,7 @@ from a_share_lab.engine import (
     select_candidates,
 )
 from a_share_lab.horizons import all_frozen_specs, trailing_windows
+from a_share_lab.sequoia_x import prepare_sequoia_features, sequoia_x_specs
 
 
 def _row(date, code, open_, high, low, close, preclose, amount=500_000_000):
@@ -71,6 +72,92 @@ def test_daily_breakout_uses_previous_day_confirmation():
         minimum_history=1,
     )
     selected = select_candidates(features[features["date"] == pd.Timestamp("2024-01-02")], spec)
+    assert selected["code"].tolist() == ["sh.600000"]
+
+
+def test_high_tight_flag_selects_strong_consolidating_low_volume_stock():
+    dates = pd.bdate_range("2024-01-01", periods=40)
+    closes = [10.0 + index * 0.25 for index in range(30)] + [17.0] * 10
+    rows = []
+    for index, (date, close) in enumerate(zip(dates, closes)):
+        previous = closes[index - 1] if index else close
+        row = _row(date, "sh.600000", close * 0.99, close * 1.01, close * 0.98, close, previous)
+        row["volume"] = 30_000 if index == 39 else 100_000
+        rows.append(row)
+
+    features = prepare_sequoia_features(pd.DataFrame(rows))
+    spec = StrategySpec(
+        name="high_tight_flag",
+        entry_model="high_tight_flag",
+        max_positions=4,
+        stop_loss=-0.08,
+        take_profit=0.15,
+        max_holding_days=20,
+        exit_model="ma20",
+        minimum_amount=0,
+        minimum_history=40,
+    )
+
+    selected = select_candidates(features[features["date"] == dates[-1]], spec)
+
+    assert selected["code"].tolist() == ["sh.600000"]
+
+
+def test_rps120_near_high_keeps_only_top_decile_momentum():
+    dates = pd.bdate_range("2023-07-03", periods=121)
+    rows = []
+    paths = {
+        "sh.600000": [10.0 + index / 12 for index in range(121)],
+        "sh.600001": [10.0 + index / 120 for index in range(121)],
+    }
+    for code, closes in paths.items():
+        for index, (date, close) in enumerate(zip(dates, closes)):
+            previous = closes[index - 1] if index else close
+            rows.append(_row(date, code, close, close * 1.01, close * 0.99, close, previous))
+
+    features = prepare_sequoia_features(pd.DataFrame(rows))
+    spec = StrategySpec(
+        name="rps120_near_high",
+        entry_model="rps120_near_high",
+        max_positions=4,
+        stop_loss=-0.08,
+        take_profit=0.15,
+        max_holding_days=20,
+        exit_model="ma20",
+        minimum_amount=0,
+        minimum_history=121,
+    )
+
+    selected = select_candidates(features[features["date"] == dates[-1]], spec)
+
+    assert selected["code"].tolist() == ["sh.600000"]
+
+
+def test_ma5_cross_ma20_volume15_requires_fresh_cross_and_volume_confirmation():
+    dates = pd.bdate_range("2024-01-01", periods=21)
+    closes = [10.0] * 15 + [9.0] * 5 + [15.0]
+    rows = []
+    for index, (date, close) in enumerate(zip(dates, closes)):
+        previous = closes[index - 1] if index else close
+        row = _row(date, "sh.600000", close, close * 1.01, close * 0.99, close, previous)
+        row["volume"] = 300_000 if index == 20 else 100_000
+        rows.append(row)
+
+    features = prepare_sequoia_features(pd.DataFrame(rows))
+    spec = StrategySpec(
+        name="ma5_cross_ma20_volume15",
+        entry_model="ma5_cross_ma20_volume15",
+        max_positions=4,
+        stop_loss=-0.08,
+        take_profit=0.15,
+        max_holding_days=20,
+        exit_model="ma20",
+        minimum_amount=0,
+        minimum_history=21,
+    )
+
+    selected = select_candidates(features[features["date"] == dates[-1]], spec)
+
     assert selected["code"].tolist() == ["sh.600000"]
 
 
@@ -250,6 +337,21 @@ def test_horizon_runner_keeps_all_frozen_strategy_origins():
     assert specs[0][1] == "existing_git"
     assert sum(origin == "first_pass_new" for _, origin in specs) == 16
     assert sum(origin == "posthoc_new" for _, origin in specs) == 4
+
+
+def test_sequoia_x_specs_freeze_three_hypotheses_under_one_portfolio_shell():
+    specs = sequoia_x_specs()
+
+    assert [spec.name for spec in specs] == [
+        "high_tight_flag_40_10",
+        "rps120_near_high",
+        "ma5_cross_ma20_volume15",
+    ]
+    assert {spec.max_positions for spec in specs} == {4}
+    assert {spec.stop_loss for spec in specs} == {-0.08}
+    assert {spec.take_profit for spec in specs} == {0.15}
+    assert {spec.max_holding_days for spec in specs} == {20}
+    assert {spec.exit_model for spec in specs} == {"ma20"}
 
 
 def test_external_scores_rank_at_close_and_fill_the_winner_next_open():
