@@ -149,8 +149,46 @@ def prepare_features(prices: pd.DataFrame) -> pd.DataFrame:
     return frame.replace([np.inf, -np.inf], np.nan)
 
 
+def prepare_sequoia_features(prices: pd.DataFrame) -> pd.DataFrame:
+    """Add the rolling columns used only by the Sequoia-X hypotheses."""
+    base_columns = {
+        "signal_price", "return_5d", "return_10d", "return_20d", "ma20", "ma60",
+        "history_days",
+    }
+    frame = prices.copy() if base_columns.issubset(prices.columns) else prepare_features(prices)
+    grouped = frame.groupby("code", group_keys=False)
+    signal_scale = frame["signal_price"] / frame["close"]
+    frame["signal_high"] = frame["high"] * signal_scale
+    frame["signal_low"] = frame["low"] * signal_scale
+    signal_grouped = frame.groupby("code", group_keys=False)["signal_price"]
+    frame["return_120d"] = signal_grouped.pct_change(120, fill_method=None)
+    frame["ma5"] = signal_grouped.transform(lambda values: values.rolling(5).mean())
+    frame["ma5_previous"] = grouped["ma5"].shift(1)
+    frame["ma20_previous"] = grouped["ma20"].shift(1)
+    frame["volume20_lag1"] = grouped["volume"].transform(
+        lambda values: values.rolling(20).mean().shift(1)
+    )
+    frame["volume20"] = grouped["volume"].transform(
+        lambda values: values.rolling(20).mean()
+    )
+    for window in (10, 40, 120):
+        frame[f"high{window}"] = grouped["signal_high"].transform(
+            lambda values, window=window: values.rolling(window).max()
+        )
+        if window != 120:
+            frame[f"low{window}"] = grouped["signal_low"].transform(
+                lambda values, window=window: values.rolling(window).min()
+            )
+    return frame.replace([np.inf, -np.inf], np.nan)
+
+
 def select_candidates(day: pd.DataFrame, spec: StrategySpec) -> pd.DataFrame:
     """Rank eligible candidates using only features known at this close."""
+    rps120 = None
+    if spec.entry_model == "rps120_near_high":
+        # RPS is a cross-sectional property of the full point-in-time universe.
+        # Tradeability and liquidity filters are applied only after ranking.
+        rps120 = day["return_120d"].rank(pct=True) * 100.0
     eligible = day[
         (day["tradestatus"] == 1)
         & (day["volume"] > 0)
@@ -229,7 +267,7 @@ def select_candidates(day: pd.DataFrame, spec: StrategySpec) -> pd.DataFrame:
         eligible = eligible[mask]
         eligible["score"] = strength[mask]
     elif spec.entry_model == "rps120_near_high":
-        eligible["rps120"] = eligible["return_120d"].rank(pct=True) * 100.0
+        eligible["rps120"] = rps120.reindex(eligible.index)
         mask = (
             (eligible["rps120"] >= 90.0)
             & (eligible["signal_price"] >= eligible["high120"] * 0.90)
@@ -409,7 +447,18 @@ def run_backtest(
     required_features = {
         "signal_price", "return_5d", "return_10d", "return_20d", "ma20", "ma60", "history_days"
     }
-    features = prices.copy() if required_features.issubset(prices.columns) else prepare_features(prices)
+    sequoia_requirements = {
+        "high_tight_flag": {"high40", "low40", "high10", "low10", "volume20_lag1"},
+        "rps120_near_high": {"return_120d", "high120"},
+        "ma5_cross_ma20_volume15": {"ma5", "ma5_previous", "ma20_previous", "volume20"},
+    }
+    required_features |= sequoia_requirements.get(spec.entry_model, set())
+    if required_features.issubset(prices.columns):
+        features = prices.copy()
+    elif spec.entry_model in sequoia_requirements:
+        features = prepare_sequoia_features(prices)
+    else:
+        features = prepare_features(prices)
     start = pd.Timestamp(start_date)
     end = pd.Timestamp(end_date)
     features = features[(features["date"] <= end)].copy()

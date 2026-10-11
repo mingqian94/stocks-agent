@@ -11,11 +11,12 @@ from a_share_lab.engine import (
     _tick_price,
     _transfer_fee,
     prepare_features,
+    prepare_sequoia_features,
     run_backtest,
     select_candidates,
 )
 from a_share_lab.horizons import all_frozen_specs, trailing_windows
-from a_share_lab.sequoia_x import prepare_sequoia_features, sequoia_x_specs
+from a_share_lab.sequoia_x import sequoia_x_specs
 
 
 def _row(date, code, open_, high, low, close, preclose, amount=500_000_000):
@@ -131,6 +132,48 @@ def test_rps120_near_high_keeps_only_top_decile_momentum():
     selected = select_candidates(features[features["date"] == dates[-1]], spec)
 
     assert selected["code"].tolist() == ["sh.600000"]
+
+
+def test_rps120_ranks_full_universe_before_liquidity_filter():
+    day = pd.DataFrame(
+        {
+            "code": [f"sh.6000{index:02d}" for index in range(10)],
+            "return_120d": list(range(10)),
+            "signal_price": [10.0] * 10,
+            "high120": [10.0] * 10,
+            "tradestatus": [1] * 10,
+            "volume": [100_000] * 10,
+            "isST": [0] * 10,
+            "history_days": [121] * 10,
+            "amount": [500_000_000] * 8 + [1_000_000] * 2,
+        }
+    )
+    spec = sequoia_x_specs()[1]
+
+    selected = select_candidates(day, spec)
+
+    assert selected.empty
+
+
+def test_run_backtest_prepares_sequoia_features_from_raw_prices():
+    dates = pd.bdate_range("2024-01-01", periods=42)
+    rows = []
+    for index, date in enumerate(dates):
+        close = 10.0 + min(index, 30) * 0.25
+        previous = 10.0 + min(max(index - 1, 0), 30) * 0.25
+        row = _row(date, "sh.600000", close, close * 1.01, close * 0.98, close, previous)
+        row["volume"] = 30_000 if index == 39 else 100_000
+        rows.append(row)
+    prices = pd.DataFrame(rows)
+    memberships = _memberships(["sh.600000"])
+    benchmark = pd.DataFrame({"date": dates, "close": range(100, 100 + len(dates))})
+    spec = sequoia_x_specs()[0]
+
+    result = run_backtest(
+        prices, memberships, benchmark, spec, str(dates[39].date()), str(dates[-1].date())
+    )
+
+    assert not result["equity_curve"].empty
 
 
 def test_ma5_cross_ma20_volume15_requires_fresh_cross_and_volume_confirmation():

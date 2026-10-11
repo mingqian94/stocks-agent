@@ -1,10 +1,11 @@
 # Kronos 与 Sequoia-X：A 股研究项目接入评估
 
-**评估日期：2026-10-10**  
-**目标仓库：`stocks-agent` / `a_share_lab`**  
+**评估日期：2026-10-10**
+
+**目标仓库：`stocks-agent` / `a_share_lab`**
 **证据边界：只采用官方 GitHub、官方模型卡、论文页和仓库源码。未把 Star 数、README 自述或示例回测当作收益有效性证明。**
 
-> **执行更新**：本报告提出的 P0 与 P1 已于同日完成。Kronos 已改为官方 `mini + Tokenizer-2k` 配对并重跑 3×4 pilot；三个 Sequoia-X 规则已独立重写并完成五窗口回测。实际结果见 [`a_share_kronos_sequoia_x_experiment_2026-10-10.md`](a_share_kronos_sequoia_x_experiment_2026-10-10.md)。
+> **执行更新**：本报告提出的 P0 与 P1 已于同日完成。Kronos 已改为官方 `mini + Tokenizer-2k` 配对并重跑 3×4 pilot；三个 Sequoia-X 规则已独立重写并完成五窗口探索性回测。P2 的 RankIC、分位组合、完整基线和不重叠样本验证尚未闭环。实际结果见 [`a_share_kronos_sequoia_x_experiment_2026-10-10.md`](a_share_kronos_sequoia_x_experiment_2026-10-10.md)。
 
 ## 结论先行
 

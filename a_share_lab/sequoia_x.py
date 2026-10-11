@@ -10,42 +10,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from .data import default_cache_dir, load_public_bundle
-from .engine import BacktestConfig, StrategySpec, prepare_features, run_backtest
+from .engine import BacktestConfig, StrategySpec, prepare_sequoia_features, run_backtest
 from .experiments import _flat_result
 from .horizons import trailing_windows
-
-
-def prepare_sequoia_features(prices: pd.DataFrame) -> pd.DataFrame:
-    """Add only the expensive rolling features required by these hypotheses."""
-    frame = prepare_features(prices)
-    grouped = frame.groupby("code", group_keys=False)
-    signal_scale = frame["signal_price"] / frame["close"]
-    frame["signal_high"] = frame["high"] * signal_scale
-    frame["signal_low"] = frame["low"] * signal_scale
-    signal_grouped = frame.groupby("code", group_keys=False)["signal_price"]
-    frame["return_120d"] = signal_grouped.pct_change(120, fill_method=None)
-    frame["ma5"] = signal_grouped.transform(lambda values: values.rolling(5).mean())
-    frame["ma5_previous"] = grouped["ma5"].shift(1)
-    frame["ma20_previous"] = grouped["ma20"].shift(1)
-    frame["volume20_lag1"] = grouped["volume"].transform(
-        lambda values: values.rolling(20).mean().shift(1)
-    )
-    frame["volume20"] = grouped["volume"].transform(
-        lambda values: values.rolling(20).mean()
-    )
-    for window in (10, 40, 120):
-        frame[f"high{window}"] = grouped["signal_high"].transform(
-            lambda values, window=window: values.rolling(window).max()
-        )
-        if window != 120:
-            frame[f"low{window}"] = grouped["signal_low"].transform(
-                lambda values, window=window: values.rolling(window).min()
-            )
-    return frame.replace([np.inf, -np.inf], np.nan)
 
 
 def sequoia_x_specs() -> list[StrategySpec]:
@@ -90,12 +60,6 @@ def run_sequoia_x_horizons(
     output = output_dir or Path(__file__).resolve().parents[1] / "research" / "results"
     output.mkdir(parents=True, exist_ok=True)
     windows = trailing_windows(end_date)
-    window_prices = {
-        horizon: prices[
-            prices["date"].between(pd.Timestamp(start_date), pd.Timestamp(end_date))
-        ]
-        for horizon, start_date in windows.items()
-    }
     records: list[dict] = []
     specs = sequoia_x_specs()
     total = len(specs) * len(windows)
@@ -104,8 +68,11 @@ def run_sequoia_x_horizons(
         for horizon, start_date in windows.items():
             number += 1
             print(f"Sequoia-X {number}/{total}: {spec.name} {horizon}", flush=True)
+            window_prices = prices[
+                prices["date"].between(pd.Timestamp(start_date), pd.Timestamp(end_date))
+            ]
             result = run_backtest(
-                prices=window_prices[horizon],
+                prices=window_prices,
                 memberships=bundle.memberships,
                 benchmark=bundle.benchmark,
                 spec=spec,
