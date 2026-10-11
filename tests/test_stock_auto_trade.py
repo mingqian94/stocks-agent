@@ -2,6 +2,10 @@
 东方财富个股动量策略（stock_auto_trade.py）的纯计算逻辑单测。
 不碰网络：选股、止损止盈、仓位计算都是不依赖 requests 的纯函数。
 """
+import datetime as dt
+from unittest.mock import patch
+
+from paper_execution import ExecutionPolicy
 import stock_auto_trade as sat
 
 
@@ -76,3 +80,54 @@ class TestPositionSizeCalculation:
 
     def test_negative_price_returns_zero(self):
         assert sat.calc_buy_qty(avail_balance=100_000, price=-5) == 0
+
+
+class TestPaperExecutionRouting:
+    def test_shadow_route_records_plan_without_calling_broker(self, tmp_path):
+        policy = ExecutionPolicy.from_environment(
+            {}, account_auto_trade=True, api_key="configured-key"
+        )
+
+        with patch.object(sat, "buy") as broker_buy:
+            result = sat.route_simulated_order(
+                "buy",
+                "600000",
+                100,
+                name="浦发银行",
+                price=10.0,
+                reason="entry",
+                policy=policy,
+                journal_path=tmp_path / "orders.jsonl",
+                now=dt.datetime(2026, 10, 12, 10, 0),
+            )
+
+        assert result.status == "shadow"
+        broker_buy.assert_not_called()
+
+    def test_confirmed_paper_route_calls_existing_eastmoney_buy(self, tmp_path):
+        policy = ExecutionPolicy.from_environment(
+            {
+                "EASTMONEY_EXECUTION_MODE": "paper",
+                "EASTMONEY_PAPER_CONFIRM": "SIMULATED_ORDERS_ONLY",
+            },
+            account_auto_trade=True,
+            api_key="configured-key",
+        )
+
+        with patch.object(sat, "buy", return_value=True) as broker_buy:
+            result = sat.route_simulated_order(
+                "buy",
+                "600000",
+                100,
+                name="浦发银行",
+                price=10.0,
+                reason="entry",
+                policy=policy,
+                journal_path=tmp_path / "orders.jsonl",
+                now=dt.datetime(2026, 10, 12, 10, 0),
+            )
+
+        assert result.status == "success"
+        broker_buy.assert_called_once_with(
+            "600000", 100, "浦发银行", 10.0, source="模拟盘"
+        )

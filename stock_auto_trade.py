@@ -5,22 +5,39 @@
 """
 
 import json
+import os
 import time
 import requests
 import datetime
 import sys
+from pathlib import Path
 import trade_logger
 import friction_log
+from paper_execution import ExecutionPolicy, OrderIntent, execute_intent
 
 # ⚠️ API Key 统一从 keys_config.py 读取，不要在这里写死
 from accounts import get_current_account
 account_info = get_current_account()
 APIKEY = account_info.get('api_key', '') if account_info else ''
 ACCOUNT_NAME = account_info.get('name', 'Unknown') if account_info else 'Unknown'
-AUTO_TRADE = account_info.get('auto_trade', False) if account_info else False
+ACCOUNT_AUTO_TRADE = account_info.get('auto_trade', False) if account_info else False
+EXECUTION_POLICY = ExecutionPolicy.from_environment(
+    os.environ,
+    account_auto_trade=ACCOUNT_AUTO_TRADE,
+    api_key=APIKEY,
+)
+AUTO_TRADE = (
+    EXECUTION_POLICY.mode == 'paper'
+    and EXECUTION_POLICY.confirmed
+    and EXECUTION_POLICY.account_auto_trade
+    and EXECUTION_POLICY.api_key_configured
+    and not EXECUTION_POLICY.kill_switch
+)
 
 APIURL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/mockTrading'
-LOG_FILE = '/Users/hetao/stocks_agent/stock_trade.log'
+_DIR = Path(__file__).resolve().parent
+LOG_FILE = _DIR / 'stock_trade.local.log'
+ORDER_JOURNAL = _DIR / 'paper_order_journal.local.jsonl'
 
 # ========== 策略参数 ==========
 # 2026.07.09 调整：第13/14/15期连续三期负收益，落地第13期复盘时写的建议——
@@ -345,11 +362,59 @@ def sell(code, qty, name='', price=None, source='自动'):
             fails, 'failed', note=f'异常: {e}')
     return False
 
+
+def route_simulated_order(
+    action,
+    code,
+    qty,
+    *,
+    name='',
+    price=None,
+    reason,
+    policy=None,
+    journal_path=None,
+    now=None,
+):
+    """Route one strategy intent through the shadow/paper safety gate."""
+    if action not in {'buy', 'sell'}:
+        raise ValueError(f'不支持的订单方向: {action}')
+    now = now or datetime.datetime.now()
+    policy = policy or EXECUTION_POLICY
+    journal_path = Path(journal_path or ORDER_JOURNAL)
+    intent = OrderIntent(
+        trade_date=now.date(),
+        strategy='daily_breakout_2_fixed',
+        action=action,
+        code=code,
+        quantity=int(qty),
+        reference_price=float(price or 0),
+        reason=reason,
+    )
+    submit = (
+        (lambda: buy(code, qty, name, price, source='模拟盘'))
+        if action == 'buy'
+        else (lambda: sell(code, qty, name, price, source='模拟盘'))
+    )
+    result = execute_intent(
+        intent,
+        policy,
+        journal_path=journal_path,
+        submit=submit,
+        now=now,
+    )
+    if result.status == 'shadow':
+        log(f'  📝 影子订单: {action} {code} x{qty} 原因={reason}（未调用接口）')
+    elif result.status == 'duplicate':
+        log(f'  ⏭️ 重复订单已拦截: {action} {code} 原因={reason}')
+    elif result.status == 'blocked':
+        log(f'  🛑 订单被安全门拦截: {action} {code} | {result.message}')
+    return result
+
 def check_and_trade():
     """检查并交易"""
     log(f'\n{"="*60}')
     log(f'📊 {ACCOUNT_NAME} 个股动量策略检查')
-    log(f'  模式: {"⚡ 自动交易模式" if AUTO_TRADE else "🔔 提醒模式"}')
+    log(f'  模式: {"⚡ 东方财富模拟委托" if AUTO_TRADE else "📝 影子订单"}')
     log(f'{"="*60}')
 
     # 获取持仓
@@ -397,9 +462,11 @@ def check_and_trade():
         for h in etf_to_clear:
             if h['avail'] > 0:
                 log(f'  🚨 检测到ETF持仓（个股策略不符）: {h["code"]} {h["name"]} {h["avail"]}股可用')
-                if AUTO_TRADE:
-                    log(f'  → 自动清仓ETF: {h["code"]}')
-                    sell(h['code'], h['avail'], h['name'], h['current'])
+                result = route_simulated_order(
+                    'sell', h['code'], h['avail'], name=h['name'], price=h['current'],
+                    reason='non_strategy_etf',
+                )
+                if result.status == 'success':
                     time.sleep(2)
             else:
                 log(f'  ⏸️ ETF {h["code"]} {h["name"]} 持有{h["count"]}股但可用0（T+1冻结，等待明日清仓）')
@@ -428,12 +495,18 @@ def check_and_trade():
     for h in active_holdings:
         if should_stop_loss(h['profit_pct']):
             log(f'  🚨 触发止损: {h["code"]} {h["profit_pct"]:+.2f}%')
-            if AUTO_TRADE and h['avail'] > 0:
-                sell(h['code'], h['avail'], h['name'], h['current'])
+            if h['avail'] > 0:
+                route_simulated_order(
+                    'sell', h['code'], h['avail'], name=h['name'], price=h['current'],
+                    reason='stop_loss',
+                )
         elif should_take_profit(h['profit_pct']):
             log(f'  🎉 触发止盈: {h["code"]} {h["profit_pct"]:+.2f}%')
-            if AUTO_TRADE and h['avail'] > 0:
-                sell(h['code'], h['avail'], h['name'], h['current'])
+            if h['avail'] > 0:
+                route_simulated_order(
+                    'sell', h['code'], h['avail'], name=h['name'], price=h['current'],
+                    reason='take_profit',
+                )
 
     # 如果没有活跃持仓或未满，寻找买入机会（可以补满到 MAX_POSITIONS 只）
     open_slots = MAX_POSITIONS - len(active_holdings)
@@ -467,8 +540,11 @@ def check_and_trade():
                 buy_qty = calc_buy_qty(avail_balance, best['price'])
                 if buy_qty >= 100:
                     log(f'  💡 建议买入: {best["code"]} {best["name"]} x{buy_qty}')
-                    if AUTO_TRADE:
-                        buy(best['code'], buy_qty, best['name'], best['price'])
+                    result = route_simulated_order(
+                        'buy', best['code'], buy_qty, name=best['name'], price=best['price'],
+                        reason='entry',
+                    )
+                    if result.status == 'success':
                         time.sleep(2)
         else:
             log('  暂无符合条件的个股')
@@ -480,7 +556,7 @@ def main():
     log('='*60)
     log(f'🚀 个股动量策略启动')
     log(f'  账户: {ACCOUNT_NAME}')
-    log(f'  自动交易: {"是" if AUTO_TRADE else "否"}')
+    log(f'  执行模式: {EXECUTION_POLICY.mode}（默认shadow；paper还需确认口令和全部安全门）')
     log(f'  策略参数: 涨幅{MIN_INCREASE*100:.0f}%-{MAX_INCREASE*100:.0f}% 成交额>{MIN_AMOUNT/100000000:.0f}亿 '
         f'{"+ 前日需上涨" if REQUIRE_PREV_DAY_UP else ""}')
     log(f'  止损{STOP_LOSS*100:.0f}% 止盈{TAKE_PROFIT*100:.0f}%')

@@ -58,6 +58,27 @@ python -m a_share_lab.sequoia_x
 
 当前固定官方配对 `Kronos-mini + Kronos-Tokenizer-2k`，本机只完成 3 股票 × 4 信号日工程验证。该结果用于证明模型、缓存和撮合链路可运行，不构成策略收益或实盘有效性证明。
 
+## 东方财富模拟盘安全模式
+
+`stock_auto_trade.py` 现在默认使用 `shadow`：会生成并记录订单意图，但不会调用东方财富下单接口。仅配置 API Key 不会自动委托。影子/模拟订单记录在 gitignored 的 `paper_order_journal.local.jsonl`，同一策略、股票、方向和原因在同一交易日只允许尝试一次。
+
+显式开启东方财富模拟委托需要同时满足：账户配置允许自动交易、真实 API Key 已配置、当前处于 A 股交易时段、单笔买入估值不超过上限，并设置下面两个环境变量：
+
+```powershell
+$env:EASTMONEY_EXECUTION_MODE = "paper"
+$env:EASTMONEY_PAPER_CONFIRM = "SIMULATED_ORDERS_ONLY"
+$env:EASTMONEY_MAX_ORDER_VALUE = "500000"
+python stock_auto_trade.py
+```
+
+紧急停止新委托：
+
+```powershell
+$env:EASTMONEY_KILL_SWITCH = "1"
+```
+
+闭市、周末、信号日期不是当天、缺少确认口令、密钥为占位符或账户未开启时，安全门会在本地拦截，不调用交易接口。当前接入的是既有 `daily_breakout_2_fixed` / 个股动量策略；Kronos 与三个 Sequoia-X 假设没有接入模拟盘。
+
 ## 风险提示
 
 本项目仅供研究与技术验证，不构成投资建议。回测收益不代表未来收益；任何实盘使用前都需要独立数据审计、前向纸面交易、真实费用/滑点校准和账户级风险控制。
