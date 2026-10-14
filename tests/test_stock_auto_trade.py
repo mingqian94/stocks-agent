@@ -82,6 +82,64 @@ class TestPositionSizeCalculation:
         assert sat.calc_buy_qty(avail_balance=100_000, price=-5) == 0
 
 
+class TestDailyLossCalculation:
+    def test_calculates_pct_from_persisted_opening_assets(self):
+        snapshot = {"totalAssets": 980_000}
+
+        assert sat.calculate_account_day_profit_pct(snapshot, 1_000_000) == -2.0
+
+    def test_missing_or_invalid_account_snapshot_fails_closed(self):
+        assert sat.calculate_account_day_profit_pct({}, 100_000) is None
+        assert sat.calculate_account_day_profit_pct({"totalAssets": 100_000}, None) is None
+
+    def test_opening_assets_are_initialized_only_near_market_open(self, tmp_path):
+        snapshot = {"totalAssets": 1_000_000}
+        risk_dir = tmp_path / "risk"
+
+        opening = sat.load_or_initialize_opening_assets(
+            snapshot,
+            dt.datetime(2026, 10, 12, 9, 30),
+            risk_dir,
+        )
+        later = sat.load_or_initialize_opening_assets(
+            {"totalAssets": 970_000},
+            dt.datetime(2026, 10, 12, 14, 0),
+            risk_dir,
+        )
+
+        assert opening == 1_000_000
+        assert later == 1_000_000
+        assert sat.calculate_account_day_profit_pct({"totalAssets": 970_000}, later) == -3.0
+
+    def test_late_start_without_opening_snapshot_blocks_new_buys(self, tmp_path):
+        assert sat.load_or_initialize_opening_assets(
+            {"totalAssets": 1_000_000},
+            dt.datetime(2026, 10, 12, 10, 0),
+            tmp_path / "risk",
+        ) is None
+
+
+def test_eastmoney_source_timestamp_is_preferred_to_receive_time():
+    received_at = dt.datetime(2026, 10, 12, 10, 0)
+    source_at = dt.datetime(2026, 10, 12, 9, 55)
+
+    assert sat.eastmoney_observed_at(
+        {"f124": int(source_at.timestamp())}, received_at
+    ) == source_at
+    assert sat.eastmoney_observed_at({}, received_at) is None
+
+
+def test_check_skips_all_account_calls_until_market_day_is_armed(tmp_path):
+    with (
+        patch.object(sat, "MARKET_OPEN_DATE_FILE", tmp_path / "missing-market-date"),
+        patch.object(sat, "get_positions") as get_positions,
+        patch.object(sat, "log"),
+    ):
+        sat.check_and_trade()
+
+    get_positions.assert_not_called()
+
+
 class TestPaperExecutionRouting:
     def test_shadow_route_records_plan_without_calling_broker(self, tmp_path):
         policy = ExecutionPolicy.from_environment(
@@ -105,6 +163,9 @@ class TestPaperExecutionRouting:
         broker_buy.assert_not_called()
 
     def test_confirmed_paper_route_calls_existing_eastmoney_buy(self, tmp_path):
+        now = dt.datetime(2026, 10, 12, 10, 0)
+        market_open_date = tmp_path / "market-open-date"
+        market_open_date.write_text(now.date().isoformat(), encoding="utf-8")
         policy = ExecutionPolicy.from_environment(
             {
                 "EASTMONEY_EXECUTION_MODE": "paper",
@@ -112,6 +173,7 @@ class TestPaperExecutionRouting:
             },
             account_auto_trade=True,
             api_key="configured-key",
+            market_open_date_path=market_open_date,
         )
 
         with patch.object(sat, "buy", return_value=True) as broker_buy:
@@ -124,7 +186,9 @@ class TestPaperExecutionRouting:
                 reason="entry",
                 policy=policy,
                 journal_path=tmp_path / "orders.jsonl",
-                now=dt.datetime(2026, 10, 12, 10, 0),
+                now=now,
+                observed_at=now,
+                account_day_profit_pct=0.0,
             )
 
         assert result.status == "success"

@@ -5,6 +5,7 @@
 """
 
 import json
+import math
 import os
 import time
 import requests
@@ -14,6 +15,13 @@ from pathlib import Path
 import trade_logger
 import friction_log
 from paper_execution import ExecutionPolicy, OrderIntent, execute_intent
+
+_DIR = Path(__file__).resolve().parent
+LOG_FILE = _DIR / 'stock_trade.local.log'
+ORDER_JOURNAL = _DIR / 'paper_order_journal.local.jsonl'
+KILL_SWITCH_FILE = _DIR / 'eastmoney_kill_switch.local'
+MARKET_OPEN_DATE_FILE = _DIR / 'eastmoney_market_open_date.local'
+DAILY_RISK_DIR = _DIR / 'paper_daily_risk.local'
 
 # ⚠️ API Key 统一从 keys_config.py 读取，不要在这里写死
 from accounts import get_current_account
@@ -25,6 +33,8 @@ EXECUTION_POLICY = ExecutionPolicy.from_environment(
     os.environ,
     account_auto_trade=ACCOUNT_AUTO_TRADE,
     api_key=APIKEY,
+    kill_switch_path=KILL_SWITCH_FILE,
+    market_open_date_path=MARKET_OPEN_DATE_FILE,
 )
 AUTO_TRADE = (
     EXECUTION_POLICY.mode == 'paper'
@@ -35,9 +45,6 @@ AUTO_TRADE = (
 )
 
 APIURL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/mockTrading'
-_DIR = Path(__file__).resolve().parent
-LOG_FILE = _DIR / 'stock_trade.local.log'
-ORDER_JOURNAL = _DIR / 'paper_order_journal.local.jsonl'
 
 # ========== 策略参数 ==========
 # 2026.07.09 调整：第13/14/15期连续三期负收益，落地第13期复盘时写的建议——
@@ -104,6 +111,88 @@ def calc_buy_qty(avail_balance, price, position_pct=MAX_POSITION_SIZE):
     buy_amount = avail_balance * position_pct
     return int(buy_amount / price / 100) * 100
 
+
+def calculate_account_day_profit_pct(pos_data, opening_assets):
+    """Calculate account P&L from today's persisted opening equity."""
+    try:
+        total_assets = float(pos_data['totalAssets'])
+        opening_assets = float(opening_assets)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if (
+        not math.isfinite(total_assets)
+        or not math.isfinite(opening_assets)
+        or opening_assets <= 0
+    ):
+        return None
+    return (total_assets - opening_assets) / opening_assets * 100
+
+
+def _read_opening_assets(path):
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        value = float(payload['opening_assets'])
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def load_or_initialize_opening_assets(pos_data, now, risk_dir=DAILY_RISK_DIR):
+    """Persist the first 09:25-09:35 total-assets snapshot for the whole day.
+
+    A late start without that baseline fails closed for buys.  The date-specific
+    file also survives intraday restarts and includes realized P&L in the equity
+    comparison after a losing position has been sold.
+    """
+    path = Path(risk_dir) / f'{now.date().isoformat()}.json'
+    existing = _read_opening_assets(path)
+    if existing is not None:
+        return existing
+    if not datetime.time(9, 25) <= now.time() <= datetime.time(9, 35):
+        return None
+    try:
+        opening_assets = float(pos_data['totalAssets'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not math.isfinite(opening_assets) or opening_assets <= 0:
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        {
+            'trade_date': now.date().isoformat(),
+            'opening_assets': opening_assets,
+            'observed_at': now.isoformat(timespec='seconds'),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    try:
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return _read_opening_assets(path)
+    except OSError:
+        return None
+    with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
+        handle.write(payload + '\n')
+    return opening_assets
+
+
+def is_market_day_armed(path, trade_date):
+    try:
+        return Path(path).read_text(encoding='utf-8').strip() == trade_date.isoformat()
+    except OSError:
+        return False
+
+
+def eastmoney_observed_at(item, _received_at):
+    """Return East Money's quote timestamp, or None when freshness is unverifiable."""
+    try:
+        timestamp = float(item['f124'])
+        observed_at = datetime.datetime.fromtimestamp(timestamp)
+    except (KeyError, TypeError, ValueError, OSError, OverflowError):
+        return None
+    return observed_at
+
 def log(msg):
     """写日志：先打印到标准输出（nohup会重定向进console日志，作为兜底记录），
     再写文件；写文件失败不应该拖垮整个盯盘进程"""
@@ -149,7 +238,16 @@ def get_stock_candidates_sina_fallback(max_pages=10):
                 amount = item.get('amount', 0)
                 price = float(item.get('trade', 0) or 0)
                 if passes_candidate_filter(pct, amount):
-                    candidates.append({'code': code, 'name': name, 'pct': pct, 'amount': amount, 'price': price})
+                    candidates.append({
+                        'code': code,
+                        'name': name,
+                        'pct': pct,
+                        'amount': amount,
+                        'price': price,
+                        # Sina only supplies a time-of-day here, with no source
+                        # date.  Keep it unverifiable so paper buys fail closed.
+                        'observed_at': None,
+                    })
             if len(items) < 80:
                 break
     except Exception as e:
@@ -158,12 +256,13 @@ def get_stock_candidates_sina_fallback(max_pages=10):
 
 def get_stock_candidates():
     """获取符合条件的个股"""
-    url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f6'
+    url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f6,f124'
     for attempt in range(3):
         try:
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
                 data = r.json().get('data', {}).get('diff', [])
+                received_at = datetime.datetime.now()
                 candidates = []
                 for item in data:
                     code = item.get('f12', '')
@@ -171,6 +270,7 @@ def get_stock_candidates():
                     pct = item.get('f3', 0) / 100 if item.get('f3') else 0
                     amount = item.get('f6', 0) if item.get('f6') else 0
                     price = item.get('f2', 0) if item.get('f2') else 0  # clist接口f2已是元
+                    observed_at = eastmoney_observed_at(item, received_at)
 
                     # 筛选条件（pct已是小数形式，直接用小数阈值比较）
                     if passes_candidate_filter(pct, amount):
@@ -179,7 +279,8 @@ def get_stock_candidates():
                             'name': name,
                             'pct': pct,
                             'amount': amount,
-                            'price': price
+                            'price': price,
+                            'observed_at': observed_at,
                         })
                 return candidates
         except Exception as e:
@@ -374,6 +475,8 @@ def route_simulated_order(
     policy=None,
     journal_path=None,
     now=None,
+    observed_at=None,
+    account_day_profit_pct=None,
 ):
     """Route one strategy intent through the shadow/paper safety gate."""
     if action not in {'buy', 'sell'}:
@@ -389,6 +492,7 @@ def route_simulated_order(
         quantity=int(qty),
         reference_price=float(price or 0),
         reason=reason,
+        observed_at=observed_at,
     )
     submit = (
         (lambda: buy(code, qty, name, price, source='模拟盘'))
@@ -401,6 +505,7 @@ def route_simulated_order(
         journal_path=journal_path,
         submit=submit,
         now=now,
+        account_day_profit_pct=account_day_profit_pct,
     )
     if result.status == 'shadow':
         log(f'  📝 影子订单: {action} {code} x{qty} 原因={reason}（未调用接口）')
@@ -417,16 +522,26 @@ def check_and_trade():
     log(f'  模式: {"⚡ 东方财富模拟委托" if AUTO_TRADE else "📝 影子订单"}')
     log(f'{"="*60}')
 
+    check_started_at = datetime.datetime.now()
+    if not is_market_day_armed(MARKET_OPEN_DATE_FILE, check_started_at.date()):
+        log('  🛑 今日交易日尚未人工确认，跳过全部账户和行情接口')
+        return
+
     # 获取持仓
     pos_data = get_positions()
     if not pos_data:
         log('  ⚠️ 无法获取持仓')
         return
+    positions_observed_at = datetime.datetime.now()
 
     # 东方财富API返回的单位：totalAssets/availBalance 是"分"级别（除以1000 = 元）
     total_assets = pos_data.get('totalAssets', 0) / 1000
     avail_balance = pos_data.get('availBalance', 0) / 1000
     pos_list = pos_data.get('posList', [])
+    opening_assets = load_or_initialize_opening_assets(
+        pos_data, positions_observed_at, DAILY_RISK_DIR
+    )
+    account_day_profit_pct = calculate_account_day_profit_pct(pos_data, opening_assets)
 
     log(f'  总资产: {total_assets:.0f}元')
     log(f'  可用资金: {avail_balance:.0f}元')
@@ -449,7 +564,8 @@ def check_and_trade():
                 'avail': avail,
                 'cost': cost,
                 'current': current,
-                'profit_pct': profit_pct
+                'profit_pct': profit_pct,
+                'observed_at': positions_observed_at,
             })
             log(f'  持仓: {code} {pos.get("secName","")} {count}股 盈亏{profit_pct:+.2f}%')
 
@@ -465,6 +581,8 @@ def check_and_trade():
                 result = route_simulated_order(
                     'sell', h['code'], h['avail'], name=h['name'], price=h['current'],
                     reason='non_strategy_etf',
+                    observed_at=h['observed_at'],
+                    account_day_profit_pct=account_day_profit_pct,
                 )
                 if result.status == 'success':
                     time.sleep(2)
@@ -473,8 +591,15 @@ def check_and_trade():
         # 重新读取持仓
         pos_data2 = get_positions()
         if pos_data2:
+            positions_observed_at = datetime.datetime.now()
             pos_list = pos_data2.get('posList', [])
             avail_balance = pos_data2.get('availBalance', 0) / 1000
+            opening_assets = load_or_initialize_opening_assets(
+                pos_data2, positions_observed_at, DAILY_RISK_DIR
+            )
+            account_day_profit_pct = calculate_account_day_profit_pct(
+                pos_data2, opening_assets
+            )
             holdings = []
             for pos in pos_list:
                 if pos.get('count', 0) > 0:
@@ -485,7 +610,8 @@ def check_and_trade():
                         'avail': pos.get('availCount', 0),
                         'cost': pos.get('costPrice', 0) / (10 ** pos.get('costPriceDec', 3)),
                         'current': pos.get('price', 0) / (10 ** pos.get('priceDec', 3)),
-                        'profit_pct': pos.get('profitPct', 0)
+                        'profit_pct': pos.get('profitPct', 0),
+                        'observed_at': positions_observed_at,
                     })
 
     # 计算"活跃持仓"：剔除T+1冻结的ETF（不可交易）
@@ -499,6 +625,8 @@ def check_and_trade():
                 route_simulated_order(
                     'sell', h['code'], h['avail'], name=h['name'], price=h['current'],
                     reason='stop_loss',
+                    observed_at=h['observed_at'],
+                    account_day_profit_pct=account_day_profit_pct,
                 )
         elif should_take_profit(h['profit_pct']):
             log(f'  🎉 触发止盈: {h["code"]} {h["profit_pct"]:+.2f}%')
@@ -506,6 +634,8 @@ def check_and_trade():
                 route_simulated_order(
                     'sell', h['code'], h['avail'], name=h['name'], price=h['current'],
                     reason='take_profit',
+                    observed_at=h['observed_at'],
+                    account_day_profit_pct=account_day_profit_pct,
                 )
 
     # 如果没有活跃持仓或未满，寻找买入机会（可以补满到 MAX_POSITIONS 只）
@@ -543,6 +673,8 @@ def check_and_trade():
                     result = route_simulated_order(
                         'buy', best['code'], buy_qty, name=best['name'], price=best['price'],
                         reason='entry',
+                        observed_at=best.get('observed_at'),
+                        account_day_profit_pct=account_day_profit_pct,
                     )
                     if result.status == 'success':
                         time.sleep(2)

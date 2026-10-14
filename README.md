@@ -62,22 +62,41 @@ python -m a_share_lab.sequoia_x
 
 `stock_auto_trade.py` 现在默认使用 `shadow`：会生成并记录订单意图，但不会调用东方财富下单接口。仅配置 API Key 不会自动委托。影子/模拟订单记录在 gitignored 的 `paper_order_journal.local.jsonl`，同一策略、股票、方向和原因在同一交易日只允许尝试一次。
 
-显式开启东方财富模拟委托需要同时满足：账户配置允许自动交易、真实 API Key 已配置、当前处于 A 股交易时段、单笔买入估值不超过上限，并设置下面两个环境变量：
+显式开启东方财富模拟委托需要同时满足：账户配置允许自动交易、真实 API Key 已配置、当前处于 A 股交易时段、当天已人工确认是交易日、行情快照未过期、账户未触发日亏损/失败次数熔断、单笔买入估值不超过上限。先设置环境变量：
 
 ```powershell
 $env:EASTMONEY_EXECUTION_MODE = "paper"
 $env:EASTMONEY_PAPER_CONFIRM = "SIMULATED_ORDERS_ONLY"
 $env:EASTMONEY_MAX_ORDER_VALUE = "500000"
+$env:EASTMONEY_MAX_SIGNAL_AGE_SECONDS = "120"
+$env:EASTMONEY_MAX_DAILY_LOSS_PCT = "2.0"
+$env:EASTMONEY_MAX_FAILED_ORDERS = "2"
+```
+
+每个交易日启动前，在确认沪深交易所当天正常开市后，写入当天日期。程序不会自动生成该文件；日期不匹配时一律不下单：
+
+```powershell
+Set-Content -LiteralPath .\eastmoney_market_open_date.local -Value (Get-Date -Format 'yyyy-MM-dd')
 python stock_auto_trade.py
 ```
 
-紧急停止新委托：
+脚本应在 09:35 前启动：第一次 09:25–09:35 的账户快照会把当天开盘总资产写入 `paper_daily_risk.local/YYYY-MM-DD.json`。后续日亏损以当前总资产相对该基线计算，包含已经卖出仓位造成的已实现盈亏；如果当天错过这个初始化窗口且没有已有基线，新买单会保持关闭，卖出风险仓位不受此项限制。
+
+运行期间紧急停止新委托（无需重启进程）：
 
 ```powershell
-$env:EASTMONEY_KILL_SWITCH = "1"
+New-Item -ItemType File -Path .\eastmoney_kill_switch.local -Force
 ```
 
-闭市、周末、信号日期不是当天、缺少确认口令、密钥为占位符或账户未开启时，安全门会在本地拦截，不调用交易接口。当前接入的是既有 `daily_breakout_2_fixed` / 个股动量策略；Kronos 与三个 Sequoia-X 假设没有接入模拟盘。
+检查原因并确认可以恢复后，可删除急停文件；删除前程序始终保持拦截：
+
+```powershell
+Remove-Item -LiteralPath .\eastmoney_kill_switch.local
+```
+
+`EASTMONEY_KILL_SWITCH=1` 也可在启动进程前静态禁用委托；运行后需要动态急停时应使用上述文件。闭市、周末、未人工确认交易日、信号日期不是当天、本次取数超过 120 秒、缺少确认口令、密钥为占位符、账户未开启、当日总资产回撤达到 2% 或当日累计失败达到 2 次时，安全门会在本地拦截，不调用交易接口。未人工确认交易日时，程序连账户和行情查询也不会发起。候选买入必须有东方财富行情源返回的 `f124` 更新时间；新浪备用源只有时分秒、无法确认来源日期，因此只用于影子观察，不会触发 paper 买入。持仓退出使用账户快照的本机接收时间，因为持仓接口不提供行情源时间；该边界会记录在风险说明中。买入受日亏损门控，卖出仍可用于退出风险仓位；失败次数门控对买卖都生效。
+
+并发进程通过 `paper_order_journal.local.jsonl.claims/` 中的原子占位防止重复委托，并以账户级执行锁串行执行“失败计数—提交—记录”，避免多个不同订单并发越过失败熔断。同一策略、股票、方向和原因在同一交易日最多提交一次；即使进程在提交前后崩溃，也会保守地阻止自动重试。订单流水、原子占位、执行锁、日初资产基线、交易日确认和急停文件都只保留在本机且已被 Git 忽略。当前接入的是既有 `daily_breakout_2_fixed` / 个股动量策略；Kronos 与三个 Sequoia-X 假设没有接入模拟盘。
 
 ## 风险提示
 
